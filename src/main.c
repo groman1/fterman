@@ -5,10 +5,9 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-
-// ENTER YOUR SORTING METHOD HERE, ONE OF ENUM SORTTYPE VALUES
-#define SORTINGMETHOD LASTMODIFIED
-
+#define REGFILECOLOR 0
+#define DIRECTORYCOLOR 1
+#define SYMLINKCOLOR 2
 
 int color = 0, maxx, maxy, pwdlen;
 char *pwd;
@@ -18,14 +17,6 @@ typedef struct
 	char *name;
 	struct stat data;
 } entry_t;
-
-enum sorttype 
-{
-	ALPHABETIC,
-	LASTMODIFIED,
-	LASTACCESED,
-	SIZE
-} sorttype;
 
 unsigned char fnamelen(char *fname)
 {
@@ -38,6 +29,66 @@ unsigned char fnamelen(char *fname)
 	}
 	return 0;
 }
+
+void pushback(entry_t *entries, int startingIndex, int qtyEntries)
+{
+	free(entries[startingIndex].name);
+	for (; startingIndex<qtyEntries-1; ++startingIndex)
+	{
+		entries[startingIndex] = entries[startingIndex+1];
+	}
+}
+
+void strPushback(char *string, int startingIndex)
+{
+	for (; string[startingIndex]; ++startingIndex)
+	{
+		string[startingIndex] = string[startingIndex+1];
+	}
+}
+
+void strPushfwd(char *string, int startingIndex) // assume string is reallocated properly
+{
+	for (; ; ++startingIndex)
+	{
+		string[startingIndex+1] = string[startingIndex];
+		if (!string[startingIndex+2]) break;
+	}
+	string[startingIndex+1] = 0;
+}
+
+
+#ifdef ALPHABETIC
+char toLower(char ch)
+{
+	if (ch>='A'&&ch<='Z') ch += 32;
+	return ch;
+}
+
+char fnamecmp(char *fname1, char *fname2)
+{
+	int i;
+	for (i = 0; fname1[i]&&fname2[i]; ++i)
+	{
+		if (toLower(fname1[i])>toLower(fname2[i]))
+		{
+			return 1;
+		}
+		else if (toLower(fname2[i])>toLower(fname1[i]))
+		{
+			return 0;
+		}
+	}
+	if (fname1[i])
+	{
+		return 0;
+	}
+	else
+	{
+		return 1;
+	}
+}
+#endif
 
 char *strccat(char *string1, char *string2)
 {
@@ -62,15 +113,15 @@ void deHighlightEntry(entry_t entry, int offset)
 	move(offset+1, 0);
 	if (S_ISDIR(entry.data.st_mode))
 	{
-		chgat(-1, A_NORMAL, 1, NULL);
+		chgat(-1, A_NORMAL, DIRECTORYCOLOR, NULL);
 	}
 	else if (S_ISLNK(entry.data.st_mode))
 	{
-		chgat(-1, A_NORMAL, 2, NULL);
+		chgat(-1, A_NORMAL, SYMLINKCOLOR, NULL);
 	}
 	else
 	{
-		chgat(-1, A_NORMAL, 0, NULL);
+		chgat(-1, A_NORMAL, REGFILECOLOR, NULL);
 	}
 }
 
@@ -79,15 +130,15 @@ void highlightEntry(entry_t entry, int offset)
 	move(offset+1, 0);
 	if (S_ISDIR(entry.data.st_mode))
 	{
-		chgat(-1, A_REVERSE, 1, NULL);
+		chgat(-1, A_REVERSE, DIRECTORYCOLOR, NULL);
 	}
 	else if (S_ISLNK(entry.data.st_mode))
 	{
-		chgat(-1, A_REVERSE, 2, NULL);
+		chgat(-1, A_REVERSE, SYMLINKCOLOR, NULL);
 	}
 	else
 	{
-		chgat(-1, A_REVERSE, 0, NULL);
+		chgat(-1, A_REVERSE, REGFILECOLOR, NULL);
 	}
 }
 
@@ -98,6 +149,7 @@ void drawPath()
 	if (pwdlen<maxx) printw("%s ", pwd);
 	else 
 	{
+	
 		for (int i = 0; i<maxx-2; ++i)
 		{
 			printw("%c", pwd[i]);
@@ -105,91 +157,79 @@ void drawPath()
 	}
 }
 
-void sortEntries(enum sorttype sorttype, entry_t *entries, int qtyEntries)
+void sortEntries(entry_t *entries, int qtyEntries)
 {
 	int sorted = 0;
 	entry_t tempentry;
-	switch (sorttype) 
+
+#ifdef ALPHABETIC
+	while (!sorted)
 	{
-		case ALPHABETIC:
+		sorted = 1;
+		for (int i = 0; i<qtyEntries-1; ++i)
 		{
-			while (!sorted)
+			if (fnamecmp(entries[i].name, entries[i+1].name))
 			{
-				sorted = 1;
-				for (int i = 0; i<qtyEntries-1; ++i)
-				{
-					if (strcmp(entries[i].name, entries[i+1].name)>0)
-					{
-						tempentry = entries[i+1];
-						entries[i+1] = entries[i];
-						entries[i] = tempentry;
-						sorted = 0;
-						break;
-					}
-				}
-			}	
-			break;
-		}
-		case LASTACCESED:
-		{
-			while (!sorted)
-			{
-				sorted = 1;
-				for (int i = 0; i<qtyEntries-2; ++i)
-				{
-					if (entries[i].data.st_atime>entries[i+1].data.st_atime)
-					{
-						sorted = 0;
-						tempentry = entries[i+1];
-						entries[i+1] = entries[i];
-						entries[i] = tempentry;
-					}
-				}
+				tempentry = entries[i+1];
+				entries[i+1] = entries[i];
+				entries[i] = tempentry;
+				sorted = 0;
+				break;
 			}
-			break;
 		}
-		case LASTMODIFIED:
+	}	
+#elifdef LASTACCESED
+	while (!sorted)
+	{
+		sorted = 1;
+		for (int i = 0; i<qtyEntries-2; ++i)
 		{
-			while (!sorted)
+			if (entries[i].data.st_atime>entries[i+1].data.st_atime)
 			{
-				sorted = 1;
-				for (int i = 0; i<qtyEntries-2; ++i)
-				{
-					if (entries[i].data.st_mtime>entries[i+1].data.st_mtime)
-					{
-						sorted = 0;
-						tempentry = entries[i+1];
-						entries[i+1] = entries[i];
-						entries[i] = tempentry;
-					}
-				}
+				sorted = 0;
+				tempentry = entries[i+1];
+				entries[i+1] = entries[i];
+				entries[i] = tempentry;
 			}
-			break;
-		}
-		case SIZE:
-		{
-			while (!sorted)
-			{
-				sorted = 1;
-				for (int i = 0; i<qtyEntries-2; ++i)
-				{
-					if (entries[i].data.st_size>entries[i+1].data.st_size)
-					{
-						sorted = 0;
-						tempentry = entries[i+1];
-						entries[i+1] = entries[i];
-						entries[i] = tempentry;
-					}
-				}
-			}
-			break;
 		}
 	}
+#elifdef LASTMODIFIED
+	while (!sorted)
+	{
+		sorted = 1;
+		for (int i = 0; i<qtyEntries-2; ++i)
+		{
+			if (entries[i].data.st_mtime>entries[i+1].data.st_mtime)
+			{
+				sorted = 0;
+				tempentry = entries[i+1];
+				entries[i+1] = entries[i];
+				entries[i] = tempentry;
+			}
+		}
+	}
+#elifdef SIZE
+	while (!sorted)
+	{
+		sorted = 1;
+		for (int i = 0; i<qtyEntries-2; ++i)
+		{
+			if (entries[i].data.st_size>entries[i+1].data.st_size)
+			{
+				sorted = 0;
+				tempentry = entries[i+1];
+				entries[i+1] = entries[i];
+				entries[i] = tempentry;
+			}
+		}
+	}
+#else 
+#error "SORTINGMETHOD not set properly"
+#endif
 }
 
 entry_t *getFileList(int *qtyEntries)
 {
-	struct stat *fileData;
 	struct dirent *entry = malloc(sizeof(struct dirent));
 	DIR *dir;
 	char *fileName;
@@ -215,9 +255,10 @@ entry_t *getFileList(int *qtyEntries)
 	free(entry);
 	free(dir);
 	*qtyEntries = currEntry;
-	sortEntries(SORTINGMETHOD, fileList, currEntry);
+	sortEntries(fileList, currEntry);
 	return fileList;
 }
+
 void freeFileList(entry_t *fileList, int qtyEntries)
 {
 	for (int i = 0; i<qtyEntries; ++i)
@@ -228,7 +269,6 @@ void freeFileList(entry_t *fileList, int qtyEntries)
 	free(fileList);
 }
 
-
 void drawObjects(entry_t *entries, int offset, int qtyEntries)
 {
 	move(1,0);
@@ -237,9 +277,9 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 	for (int i = offset; i<qtyEntries; ++i)
 	{
 		overflown = 0;
-		if (S_ISDIR(entries[i].data.st_mode)) currPair = 1;
-		else if (S_ISLNK(entries[i].data.st_mode)) currPair = 2;
-		else currPair = 0;
+		if (S_ISDIR(entries[i].data.st_mode)) currPair = DIRECTORYCOLOR;
+		else if (S_ISLNK(entries[i].data.st_mode)) currPair = SYMLINKCOLOR;
+		else currPair = REGFILECOLOR;
 		attron(COLOR_PAIR(currPair));
 		for (currLen = 0; currLen<maxx-2&&entries[i].name[currLen]; ++currLen)
 		{
@@ -295,7 +335,7 @@ entry_t *enterObject(entry_t *entries, int entryID, int *qtyEntries)
 		if (entries) 
 		{
 			drawPath();
-			sortEntries(SORTINGMETHOD, entries, *qtyEntries);
+			sortEntries(entries, *qtyEntries);
 			drawObjects(entries, 0, *qtyEntries);
 			highlightEntry(entries[0], 0);
 		}
@@ -338,6 +378,83 @@ entry_t *enterObject(entry_t *entries, int entryID, int *qtyEntries)
 	}
 }
 
+void deleteFile(char *file)
+{
+	char *command = malloc(7+pwdlen+fnamelen(file));
+	char initial[] = "rm -rf ";
+	for (int i = 0; initial[i]; ++i)
+	{
+		command[i] = initial[i];
+	}
+	for (int i = 0; pwd[i]; ++i)
+	{
+		command[7+i] = pwd[i];
+	}
+	for (int i = 0; file[i]; ++i)
+	{
+		command[7+pwdlen+i] = file[i];
+	}
+	command[7+pwdlen+fnamelen(file)] = 0;
+	system(command);
+	free(command);
+}
+
+void printName(char *name, int offset)
+{
+	move(1+offset, 0);
+	printw("%s ", name);
+}
+
+void editfname(entry_t *entry, int offset)
+{
+	char *oldname = malloc(fnamelen(entry->name));
+	strcpy(oldname, entry->name);
+	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
+	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
+	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
+	attron(COLOR_PAIR(currPair));
+	while((ch=getch())&&ch!=10)
+	{
+		switch(ch)
+		{
+			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.':
+			{	if (currIndex<256) {entry->name = realloc(entry->name, filenameLen+1); if (filenameLen!=currIndex+1) {	strPushfwd(entry->name, currIndex); }  ++filenameLen; entry->name[currIndex++] = ch; } break;	}
+			case 263:
+			{	if (currIndex) {  strPushback(entry->name, currIndex); --currIndex; entry->name = realloc(entry->name, --filenameLen); } break;	}
+			default: break;
+		}
+		printName(entry->name, offset);
+	}
+	attroff(COLOR_PAIR(currPair));
+	char *command = malloc(5+2*pwdlen+fnamelen(oldname)+fnamelen(entry->name)); // "mv "(3 bytes) + pwd + old filename + " " (1 byte) + pwd + new filename. As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
+	char mv[] = "mv ";
+	for (int i = 0; mv[i]; ++i)
+	{
+		command[i] = mv[i];
+	}
+	for (int i = 0; pwd[i]; ++i)
+	{
+		command[3+i] = pwd[i];
+	}
+	for (int i = 0; oldname[i]; ++i)
+	{
+		command[3+pwdlen+i] = oldname[i];
+	}
+	command[3+pwdlen+fnamelen(oldname)] = ' ';
+	for (int i = 0; pwd[i]; ++i)
+	{
+		command[4+pwdlen+fnamelen(oldname)+i] = pwd[i];
+	}
+	for (int i = 0; entry->name[i]; ++i)
+	{
+		command[4+2*pwdlen+fnamelen(oldname)+i] = entry->name[i];
+	}
+	command[5+2*pwdlen+fnamelen(oldname)+fnamelen(entry->name)] = 0;
+	system(command);
+	free(oldname);
+	free(command);
+}
+
 int main()
 {
 	initscr();
@@ -346,14 +463,14 @@ int main()
 	{
 		color = 1;
 		start_color();
-		init_pair(1, COLOR_BLUE, COLOR_BLACK); // directory color
-		init_pair(2, COLOR_CYAN, COLOR_BLACK); // symlink color
+		init_pair(DIRECTORYCOLOR, COLOR_BLUE, COLOR_BLACK); // directory color
+		init_pair(SYMLINKCOLOR, COLOR_CYAN, COLOR_BLACK); // symlink color
 	}
 	noecho();
 	keypad(stdscr, 1);
 	getmaxyx(stdscr, maxy, maxx);
 
-	int keypressed, entrySelected = 0;
+	int keypressed;
 	char *temppwd = getenv("PWD");
 	pwdlen = strlen(temppwd);
 	pwd = malloc(pwdlen+2);
@@ -374,13 +491,17 @@ int main()
 			case 81: case 113:
 			{	endwin(); return 0;		}
 			case 261: case 10: case 32:
-			{	if (entries) {entries = enterObject(entries, currEntry+offset, &qtyEntries); currEntry = offset = 0; } break;	}
+			{	if (entries) {entries = enterObject(entries, currEntry, &qtyEntries); currEntry = offset = 0; } break;	}
 			case 258:
 			{	if (currEntry<qtyEntries-1) { deHighlightEntry(entries[currEntry], currEntry-offset); ++currEntry; if (currEntry-offset>maxy-2) { ++offset; } drawPath(); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); } break;	}
 			case 259:
 			{	if (currEntry>0) { deHighlightEntry(entries[currEntry], currEntry-offset); --currEntry; if (currEntry-offset<0) { --offset; drawPath(); drawObjects(entries, offset, qtyEntries); } highlightEntry(entries[currEntry], currEntry-offset); } break;	}
 			case 260:
-			{	if(pwdlen>1) {	goback(); drawPath(); offset = 0; currEntry = 0; if (entries) {freeFileList(entries, qtyEntries); } entries = getFileList(&qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], 0); } break;	}
+			{	if (pwdlen>1) {	goback(); drawPath(); offset = 0; currEntry = 0; if (entries) {freeFileList(entries, qtyEntries); } entries = getFileList(&qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], 0); } break;	}
+			case 330:
+			{	deleteFile(entries[currEntry].name); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
+			case 266:
+			{	editfname(&entries[currEntry], currEntry-offset); break;	}
 			default: break;
 		}
 	}
