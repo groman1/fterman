@@ -398,16 +398,25 @@ void deleteFile(char *file)
 	free(command);
 }
 
-void printName(char *name, int offset)
+void printName(char *name, int lenSize, int offset)
 {
 	move(1+offset, 0);
-	int i;
-	for (i = 0; name[i]; ++i)
+	int i = fnamelen(name);
+	if (i+lenSize+2>=maxx)
+	{
+		printw("..");
+		i -= maxx-lenSize-4;
+	}
+	else i = 0;
+	for (; name[i]; ++i)
 	{
 		printw("%c", name[i]);
 	}
-	mvprintw(1+offset, i, " ");
-	move(1+offset, i);
+	if (i+lenSize+2<maxx)
+	{
+		mvprintw(1+offset, i, " ");
+		move(1+offset, i);
+	}
 }
 
 void editfname(entry_t *entry, int offset)
@@ -416,23 +425,29 @@ void editfname(entry_t *entry, int offset)
 	strcpy(oldname, entry->name);
 	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
 
+	int currFileSizeLen = 1, multiplier = 10;
+	while (entry->data.st_size/multiplier)
+	{
+		++currFileSizeLen;
+		multiplier *= 10;
+	}
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
 	attron(A_REVERSE|COLOR_PAIR(currPair));
 
 	curs_set(1);
-	printName(entry->name, offset);
+	printName(entry->name, currFileSizeLen, offset);
 	while((ch=getch())&&ch!=10)
 	{
 		switch(ch)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.':
-			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+1); if (filenameLen!=currIndex+1) {	strPushfwd(entry->name, currIndex); }  ++filenameLen; entry->name[++currIndex] = ch; } break;	}
+			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) {	strPushfwd(entry->name, currIndex); }  ++filenameLen; entry->name[++currIndex] = ch; entry->name[currIndex+1] = 0; } break;	}
 			case 263:
 			{	if (filenameLen) {  strPushback(entry->name, currIndex--); entry->name = realloc(entry->name, filenameLen--); } break;	}
 			default: break;
 		}
-		printName(entry->name, offset);
+		printName(entry->name, currFileSizeLen, offset);
 	}
 	attroff(A_REVERSE|COLOR_PAIR(currPair));
 
@@ -514,7 +529,7 @@ int main()
 			case 330:
 			{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
 			case 266:
-			{	editfname(&entries[currEntry], currEntry-offset); break;	}
+			{	editfname(&entries[currEntry], currEntry-offset); drawPath(); drawObjects(entries, currEntry-offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); break;	}
 			default: break;
 		}
 	}
