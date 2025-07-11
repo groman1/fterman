@@ -9,7 +9,7 @@
 #define SYMLINKCOLOR 2
 
 int color = 0, maxx, maxy, pwdlen;
-char *pwd;
+char *pwd, *savedpwd;
 
 typedef struct
 {
@@ -151,6 +151,20 @@ void highlightEntry(entry_t entry, int offset)
 	{
 		chgat(-1, A_REVERSE, REGFILECOLOR, NULL);
 	}
+}
+
+void savePWD()
+{
+	free(savedpwd);
+	savedpwd = malloc(pwdlen);
+	strcpy(savedpwd, pwd);
+}
+
+void loadsavedPWD()
+{
+	free(pwd);
+	pwd = malloc(strlen(savedpwd));
+	strcpy(pwd, savedpwd);
 }
 
 void drawPath()
@@ -510,6 +524,8 @@ int main()
 	strcpy(pwd, temppwd);
 	pwd[pwdlen++] = '/';
 	pwd[pwdlen] = 0;
+	savedpwd = malloc(pwdlen);
+	strcpy(savedpwd, pwd);
 
 	int qtyEntries = 0, currEntry = 0, offset = 0;
 	entry_t *entries = getFileList(&qtyEntries);
@@ -535,6 +551,10 @@ int main()
 			{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
 			case 266:
 			{	editfname(&entries[currEntry], currEntry-offset); drawPath(); sortEntries(entries, qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); break;	}
+			case 5:
+			{	savePWD(); break;	}
+			case 12:
+			{	loadsavedPWD(); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); break; }
 			default: break;
 		}
 	}
