@@ -7,7 +7,7 @@ lastaccessed:
 size:
 	cc src/main.c -O2 -o fterman -D SIZE -lncurses
 debug:
-	cc src/main.c -o fterman-g -lncurses -g
+	cc src/main.c -D SIZE -o fterman-g -lncurses -g
 cleanmain:
 	rm main
 cleandebug:

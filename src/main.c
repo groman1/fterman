@@ -1,5 +1,4 @@
 #include <ncurses.h>
-#include <time.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -24,7 +23,7 @@ unsigned char fnamelen(char *fname)
 	{
 		if (fname[i]==0)
 		{
-			return i;
+		return i;
 		}
 	}
 	return 0;
@@ -54,7 +53,7 @@ void strPushfwd(char *string, int startingIndex) // assume string is reallocated
 		string[startingIndex+1] = string[startingIndex];
 		if (!string[startingIndex+2]) break;
 	}
-	string[startingIndex+1] = 0;
+	string[startingIndex] = 0;
 }
 
 
@@ -402,7 +401,13 @@ void deleteFile(char *file)
 void printName(char *name, int offset)
 {
 	move(1+offset, 0);
-	printw("%s ", name);
+	int i;
+	for (i = 0; name[i]; ++i)
+	{
+		printw("%c", name[i]);
+	}
+	mvprintw(1+offset, i, " ");
+	move(1+offset, i);
 }
 
 void editfname(entry_t *entry, int offset)
@@ -410,22 +415,28 @@ void editfname(entry_t *entry, int offset)
 	char *oldname = malloc(fnamelen(entry->name));
 	strcpy(oldname, entry->name);
 	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
+
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
-	attron(COLOR_PAIR(currPair));
+	attron(A_REVERSE|COLOR_PAIR(currPair));
+
+	curs_set(1);
+	printName(entry->name, offset);
 	while((ch=getch())&&ch!=10)
 	{
 		switch(ch)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.':
-			{	if (currIndex<256) {entry->name = realloc(entry->name, filenameLen+1); if (filenameLen!=currIndex+1) {	strPushfwd(entry->name, currIndex); }  ++filenameLen; entry->name[currIndex++] = ch; } break;	}
+			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+1); if (filenameLen!=currIndex+1) {	strPushfwd(entry->name, currIndex); }  ++filenameLen; entry->name[++currIndex] = ch; } break;	}
 			case 263:
-			{	if (currIndex) {  strPushback(entry->name, currIndex); --currIndex; entry->name = realloc(entry->name, --filenameLen); } break;	}
+			{	if (filenameLen) {  strPushback(entry->name, currIndex--); entry->name = realloc(entry->name, filenameLen--); } break;	}
 			default: break;
 		}
 		printName(entry->name, offset);
 	}
-	attroff(COLOR_PAIR(currPair));
+	attroff(A_REVERSE|COLOR_PAIR(currPair));
+
+
 	char *command = malloc(5+2*pwdlen+fnamelen(oldname)+fnamelen(entry->name)); // "mv "(3 bytes) + pwd + old filename + " " (1 byte) + pwd + new filename. As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
 	char mv[] = "mv ";
 	for (int i = 0; mv[i]; ++i)
@@ -451,6 +462,8 @@ void editfname(entry_t *entry, int offset)
 	}
 	command[5+2*pwdlen+fnamelen(oldname)+fnamelen(entry->name)] = 0;
 	system(command);
+
+	curs_set(0);
 	free(oldname);
 	free(command);
 }
@@ -499,7 +512,7 @@ int main()
 			case 260:
 			{	if (pwdlen>1) {	goback(); drawPath(); offset = 0; currEntry = 0; if (entries) {freeFileList(entries, qtyEntries); } entries = getFileList(&qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], 0); } break;	}
 			case 330:
-			{	deleteFile(entries[currEntry].name); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
+			{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
 			case 266:
 			{	editfname(&entries[currEntry], currEntry-offset); break;	}
 			default: break;
