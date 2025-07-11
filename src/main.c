@@ -554,7 +554,7 @@ int main()
 			case 5:
 			{	savePWD(); break;	}
 			case 12:
-			{	loadsavedPWD(); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); break; }
+			{	loadsavedPWD(); freeFileList(entries, qtyEntries); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); break; }
 			default: break;
 		}
 	}
