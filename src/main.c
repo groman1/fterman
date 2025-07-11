@@ -29,6 +29,18 @@ unsigned char fnamelen(char *fname)
 	return 0;
 }
 
+unsigned char getIntLen(long long input)
+{
+	unsigned char currFileSizeLen = 1;
+	unsigned long long multiplier = 10;
+	while (input/multiplier)
+	{
+		++currFileSizeLen;
+		multiplier *= 10;
+	}
+	return currFileSizeLen;
+}
+
 void pushback(entry_t *entries, int startingIndex, int qtyEntries)
 {
 	free(entries[startingIndex].name);
@@ -271,35 +283,32 @@ void freeFileList(entry_t *fileList, int qtyEntries)
 void drawObjects(entry_t *entries, int offset, int qtyEntries)
 {
 	move(1,0);
-	int currPair, overflown, currLen;
+	int currPair, currLen;
 	char *sizestr = malloc(20);
 	for (int i = offset; i<qtyEntries; ++i)
 	{
-		overflown = 0;
 		if (S_ISDIR(entries[i].data.st_mode)) currPair = DIRECTORYCOLOR;
 		else if (S_ISLNK(entries[i].data.st_mode)) currPair = SYMLINKCOLOR;
 		else currPair = REGFILECOLOR;
 		attron(COLOR_PAIR(currPair));
-		for (currLen = 0; currLen<maxx-2&&entries[i].name[currLen]; ++currLen)
+		for (currLen = 0; currLen<maxx-4-getIntLen(entries[i].data.st_size)&&entries[i].name[currLen]; ++currLen)
 		{
 			printw("%c", entries[i].name[currLen]);
 		}
 		if (entries[i].name[currLen]) 
 		{	
 			printw("..");
-			overflown = 1;
+			currLen+=2;
 		}
 		attroff(COLOR_PAIR(currPair));
 
-		sprintf(sizestr, "%ld", entries[i].data.st_size);
-		if (!overflown&&fnamelen(sizestr)+currLen<maxx)	
+		sprintf(sizestr, "%lu", entries[i].data.st_size);
+		for (int x = 0; x<maxx-currLen-fnamelen(sizestr)-1; ++x)
 		{
-			for (int x = 0; x<maxx-currLen-fnamelen(sizestr); ++x)
-			{
-				printw(" ");
-			}
-			printw("%s", sizestr);
+			printw(" ");
 		}
+		printw("%s", sizestr);
+
 		move(i-offset+2, 0);
 	}
 }
@@ -424,13 +433,9 @@ void editfname(entry_t *entry, int offset)
 	char *oldname = malloc(fnamelen(entry->name));
 	strcpy(oldname, entry->name);
 	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
-
-	int currFileSizeLen = 1, multiplier = 10;
-	while (entry->data.st_size/multiplier)
-	{
-		++currFileSizeLen;
-		multiplier *= 10;
-	}
+	
+	int currFileSizeLen = getIntLen(entry->data.st_size);
+	
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
 	attron(A_REVERSE|COLOR_PAIR(currPair));
@@ -529,7 +534,7 @@ int main()
 			case 330:
 			{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
 			case 266:
-			{	editfname(&entries[currEntry], currEntry-offset); drawPath(); drawObjects(entries, currEntry-offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); break;	}
+			{	editfname(&entries[currEntry], currEntry-offset); drawPath(); sortEntries(entries, qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); break;	}
 			default: break;
 		}
 	}
