@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include "settings.h"
 
 #define REGFILECOLOR 0
 #define DIRECTORYCOLOR 1
@@ -504,6 +505,7 @@ void editfname(entry_t *entry, int offset)
 
 int main()
 {
+	struct keybind_s keybinds = loadKeybinds();
 	initscr();
 	curs_set(0);
 	if (has_colors())
@@ -517,7 +519,7 @@ int main()
 	keypad(stdscr, 1);
 	getmaxyx(stdscr, maxy, maxx);
 
-	int keypressed;
+	keybind_t keypressed;
 	char *temppwd = getenv("PWD");
 	pwdlen = strlen(temppwd);
 	pwd = malloc(pwdlen+2);
@@ -535,28 +537,26 @@ int main()
 
 	while (keypressed=getch())
 	{
-		switch (keypressed) 
-		{
-			case 81: case 113:
-			{	endwin(); return 0;		}
-			case 261: case 10: case 32:
-			{	if (entries) {entries = enterObject(entries, currEntry, &qtyEntries); currEntry = offset = 0; } break;	}
-			case 258:
-			{	if (currEntry<qtyEntries-1) { deHighlightEntry(entries[currEntry], currEntry-offset); ++currEntry; if (currEntry-offset>maxy-2) { ++offset; } drawPath(); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); } break;	}
-			case 259:
-			{	if (currEntry>0) { deHighlightEntry(entries[currEntry], currEntry-offset); --currEntry; if (currEntry-offset<0) { --offset; drawPath(); drawObjects(entries, offset, qtyEntries); } highlightEntry(entries[currEntry], currEntry-offset); } break;	}
-			case 260:
-			{	if (pwdlen>1) {	goback(); drawPath(); offset = 0; currEntry = 0; if (entries) {freeFileList(entries, qtyEntries); } entries = getFileList(&qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], 0); } break;	}
-			case 330:
-			{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); break; }
-			case 266:
-			{	editfname(&entries[currEntry], currEntry-offset); drawPath(); sortEntries(entries, qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); break;	}
-			case 5:
-			{	savePWD(); break;	}
-			case 12:
-			{	loadsavedPWD(); freeFileList(entries, qtyEntries); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); break; }
-			default: break;
-		}
+		if (keypressed==keybinds.quit)
+		{	break;		}
+		else if (keypressed==keybinds.goFwd)
+		{	if (entries) {entries = enterObject(entries, currEntry, &qtyEntries); currEntry = offset = 0; }	}
+		else if (keypressed==keybinds.goDown)
+		{	if (currEntry<qtyEntries-1) { deHighlightEntry(entries[currEntry], currEntry-offset); ++currEntry; if (currEntry-offset>maxy-2) { ++offset; } drawPath(); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); }	}
+		else if (keypressed==keybinds.goUp)
+		{	if (currEntry>0) { deHighlightEntry(entries[currEntry], currEntry-offset); --currEntry; if (currEntry-offset<0) { --offset; drawPath(); drawObjects(entries, offset, qtyEntries); } highlightEntry(entries[currEntry], currEntry-offset); }	}
+		else if (keypressed==keybinds.goBack)
+		{	if (pwdlen>1) {	goback(); drawPath(); offset = 0; currEntry = 0; if (entries) {freeFileList(entries, qtyEntries); } entries = getFileList(&qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], 0); }	}
+		else if (keypressed==keybinds.deletefile)
+		{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); }
+		else if (keypressed==keybinds.editfile)
+		{	editfname(&entries[currEntry], currEntry-offset); drawPath(); sortEntries(entries, qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset);	}
+		else if (keypressed==keybinds.savedir)
+		{	savePWD();	}
+		else if (keypressed==keybinds.loaddir)
+		{	loadsavedPWD(); freeFileList(entries, qtyEntries); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); }
+		else if (keypressed==15)
+		{	drawSettings(&keybinds); drawPath(); drawObjects(entries, currEntry-offset, qtyEntries);	}
 	}
 	endwin();
 	return 0;
