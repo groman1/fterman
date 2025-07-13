@@ -53,6 +53,11 @@ keybind_t strTokeybind_t(char *string)
 	return keybind;
 }
 
+void bindSetting(int offset)
+{
+	mvchgat(1+offset, 0, -1, A_NORMAL, 3, NULL);
+}
+
 void highlightSetting(int offset)
 {
 	mvchgat(1+offset, 0, -1, A_REVERSE, 0, NULL);
@@ -118,7 +123,7 @@ void drawSettings(struct keybind_s *keybinds)
 		switch (ch)
 		{
 			case 10: 
-			{	ch = getch(); config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); keybind_tToStr(ch, config->dataArr[currLine].value.str); break;	}
+			{	bindSetting(currLine);	ch = getch(); config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); keybind_tToStr(ch, config->dataArr[currLine].value.str); highlightSetting(currLine); break;	}
 			case 258:
 			{	if (currLine<8) { dehighlightSetting(currLine); highlightSetting(++currLine); } break;	}
 			case 259:

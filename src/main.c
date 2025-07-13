@@ -59,14 +59,13 @@ void strPushback(char *string, int startingIndex)
 	}
 }
 
-void strPushfwd(char *string, int startingIndex) // assume string is reallocated properly
+void strPushfwd(char *string, int startingIndex, int stringLen) // assume string is reallocated properly
 {
-	for (; ; ++startingIndex)
+	for (int i = stringLen; i>startingIndex; --i)
 	{
-		string[startingIndex+1] = string[startingIndex];
-		if (!string[startingIndex+2]) break;
+		string[i] = string[i-1];
 	}
-	string[startingIndex] = 0;
+	string[stringLen+1] = 0;
 }
 
 
@@ -422,7 +421,7 @@ void deleteFile(char *file)
 	free(command);
 }
 
-void printName(char *name, int lenSize, int offset)
+void printName(char *name, int lenSize, int offset, int currIndex)
 {
 	move(1+offset, 0);
 	int i = fnamelen(name);
@@ -439,7 +438,7 @@ void printName(char *name, int lenSize, int offset)
 	if (i+lenSize+2<maxx)
 	{
 		mvprintw(1+offset, i, " ");
-		move(1+offset, i);
+		move(1+offset, currIndex+1);
 	}
 }
 
@@ -456,18 +455,22 @@ void editfname(entry_t *entry, int offset)
 	attron(A_REVERSE|COLOR_PAIR(currPair));
 
 	curs_set(1);
-	printName(entry->name, currFileSizeLen, offset);
+	printName(entry->name, currFileSizeLen, offset, currIndex);
 	while((ch=getch())&&ch!=10)
 	{
 		switch(ch)
 		{
-			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.':
-			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) {	strPushfwd(entry->name, currIndex); }  ++filenameLen; entry->name[++currIndex] = ch; entry->name[currIndex+1] = 0; } break;	}
+			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
+			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
 			case 263:
-			{	if (filenameLen) {  strPushback(entry->name, currIndex--); entry->name = realloc(entry->name, filenameLen--); } break;	}
+			{	if (filenameLen) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
+			case 260:
+			{	if (currIndex+1) {--currIndex; } break;	}
+			case 261: 
+			{	if (currIndex<filenameLen-1) { ++currIndex; } break; }
 			default: break;
 		}
-		printName(entry->name, currFileSizeLen, offset);
+		printName(entry->name, currFileSizeLen, offset, currIndex);
 	}
 	attroff(A_REVERSE|COLOR_PAIR(currPair));
 
@@ -507,6 +510,7 @@ int main()
 {
 	struct keybind_s keybinds = loadKeybinds();
 	initscr();
+	raw();
 	curs_set(0);
 	if (has_colors())
 	{
@@ -556,7 +560,7 @@ int main()
 		else if (keypressed==keybinds.loaddir)
 		{	loadsavedPWD(); freeFileList(entries, qtyEntries); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); }
 		else if (keypressed==15)
-		{	drawSettings(&keybinds); drawPath(); drawObjects(entries, currEntry-offset, qtyEntries);	}
+		{	drawSettings(&keybinds); drawPath(); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset);	}
 	}
 	endwin();
 	return 0;
