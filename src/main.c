@@ -332,23 +332,31 @@ void accessdenied()
 	mvprintw(1,0,"Access denied");
 }
 
-void goback()
+char *goback(char *backpath)
 {
 	int i;
-	for (i = pwdlen-2; pwd[i]!='/'; pwd[i--]=0);
-	pwdlen = i+1;
+	for (i = pwdlen-2; pwd[i]!='/'; --i);
+	backpath = realloc(backpath, pwdlen-++i);
+	for (int x = 0; x<pwdlen-i-1; ++x)
+	{
+		backpath[x] = pwd[i+x];
+		pwd[i+x] = 0;
+	}
+	backpath[pwdlen-i-1] = 0;
+	pwdlen = i;
 	pwd = realloc(pwd, pwdlen+1);
+	return backpath;
 }
 
-entry_t *enterObject(entry_t *entries, int entryID, int *qtyEntries)
+entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 {
 	if (!*qtyEntries) return entries;
-	if (S_ISDIR(entries[entryID].data.st_mode))
+	if (S_ISDIR(entries[*entryID].data.st_mode))
 	{
-		pwd = realloc(pwd, pwdlen+fnamelen(entries[entryID].name)+2);
-		for (int i = 0; entries[entryID].name[i]; ++i)
+		pwd = realloc(pwd, pwdlen+fnamelen(entries[*entryID].name)+2);
+		for (int i = 0; entries[*entryID].name[i]; ++i)
 		{
-			pwd[pwdlen++] = entries[entryID].name[i];
+			pwd[pwdlen++] = entries[*entryID].name[i];
 		}
 		pwd[pwdlen++] = '/';
 		pwd[pwdlen] = 0;
@@ -366,6 +374,7 @@ entry_t *enterObject(entry_t *entries, int entryID, int *qtyEntries)
 			drawPath();
 			accessdenied();
 		}
+		*entryID = 0;
 		return entries;
 	}
 	else
@@ -384,18 +393,19 @@ entry_t *enterObject(entry_t *entries, int entryID, int *qtyEntries)
 			command[size+currSize] = pwd[currSize];
 		}
 		size += currSize;
-		command = realloc(command, size+1+fnamelen(entries[entryID].name));
-		for (currSize = 0; entries[entryID].name[currSize]; ++currSize)
+		command = realloc(command, size+1+fnamelen(entries[*entryID].name));
+		for (currSize = 0; entries[*entryID].name[currSize]; ++currSize)
 		{
-			command[size+currSize] = entries[entryID].name[currSize];
+			command[size+currSize] = entries[*entryID].name[currSize];
 		}
 		command[size+currSize] = 0;
 		endwin();
 		system(command);
 		initscr();
 		drawPath();
-		drawObjects(entries, 0, *qtyEntries);
-		highlightEntry(entries[0], 0);
+		int offset = *entryID>maxy/2?*entryID-maxy/2:0;
+		drawObjects(entries, offset, *qtyEntries);
+		highlightEntry(entries[*entryID], *entryID-offset);
 		return entries;
 	}
 }
@@ -506,11 +516,22 @@ void editfname(entry_t *entry, int offset)
 	free(command);
 }
 
+int findentry(char *entryname, entry_t *entries, int qtyEntries)
+{
+	for (int i = 0; i<qtyEntries; ++i)
+	{
+		if (!strcmp(entries[i].name, entryname)) return i;
+	}
+	return -1;
+}
+
 int main()
 {
 	struct keybind_s keybinds = loadKeybinds();
 	initscr();
+#ifndef NORAW // so you can ctrl+c out of the program
 	raw();
+#endif
 	curs_set(0);
 	if (has_colors())
 	{
@@ -534,6 +555,7 @@ int main()
 	strcpy(savedpwd, pwd);
 
 	int qtyEntries = 0, currEntry = 0, offset = 0;
+	char *backpwd = NULL;
 	entry_t *entries = getFileList(&qtyEntries);
 	drawPath();
 	drawObjects(entries, 0, qtyEntries);
@@ -542,25 +564,99 @@ int main()
 	while (keypressed=getch())
 	{
 		if (keypressed==keybinds.quit)
-		{	break;		}
+		{	break;	}
 		else if (keypressed==keybinds.goFwd)
-		{	if (entries) {entries = enterObject(entries, currEntry, &qtyEntries); currEntry = offset = 0; }	}
+		{	
+			if (entries) 
+			{
+				entries = enterObject(entries, &currEntry, &qtyEntries);
+				offset = currEntry>maxy/2?currEntry-maxy/2:0;
+			}	
+		}
 		else if (keypressed==keybinds.goDown)
-		{	if (currEntry<qtyEntries-1) { deHighlightEntry(entries[currEntry], currEntry-offset); ++currEntry; if (currEntry-offset>maxy-2) { ++offset; } drawPath(); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset); }	}
+		{	
+			if (currEntry<qtyEntries-1) 
+			{ 
+				deHighlightEntry(entries[currEntry], currEntry-offset); 
+				++currEntry; 
+				if (currEntry-offset>maxy-2)
+				{
+					++offset; 
+					drawPath(); 
+					drawObjects(entries, offset, qtyEntries); 
+				}
+				highlightEntry(entries[currEntry], currEntry-offset); 
+			}	
+		}
 		else if (keypressed==keybinds.goUp)
-		{	if (currEntry>0) { deHighlightEntry(entries[currEntry], currEntry-offset); --currEntry; if (currEntry-offset<0) { --offset; drawPath(); drawObjects(entries, offset, qtyEntries); } highlightEntry(entries[currEntry], currEntry-offset); }	}
+		{	
+			if (currEntry>0) 
+			{ 
+				deHighlightEntry(entries[currEntry], currEntry-offset); 
+				--currEntry; 
+				if (currEntry-offset<0)
+				{	
+					--offset; 
+					drawPath(); 
+					drawObjects(entries, offset, qtyEntries); 
+				}
+				highlightEntry(entries[currEntry], currEntry-offset); 
+			}	
+		}
 		else if (keypressed==keybinds.goBack)
-		{	if (pwdlen>1) {	goback(); drawPath(); offset = 0; currEntry = 0; if (entries) {freeFileList(entries, qtyEntries); } entries = getFileList(&qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], 0); }	}
+		{	
+			if (pwdlen>1) 
+			{	
+				backpwd = goback(backpwd);
+				drawPath();  
+				if (entries) freeFileList(entries, qtyEntries); 
+				entries = getFileList(&qtyEntries); 
+				currEntry = findentry(backpwd, entries, qtyEntries); 
+				offset = currEntry>maxy/2?currEntry-maxy/2:0;  
+				drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], currEntry-offset); 
+			}	
+		}
 		else if (keypressed==keybinds.deletefile)
-		{	deleteFile(entries[currEntry].name); deHighlightEntry(entries[currEntry], currEntry-offset); pushback(entries, currEntry, qtyEntries); --qtyEntries; drawPath(); drawObjects(entries, offset, qtyEntries); if (currEntry==qtyEntries-1) { --currEntry; if (offset) { --offset; } } highlightEntry(entries[currEntry], currEntry-offset); }
+		{	
+			deleteFile(entries[currEntry].name); 
+			deHighlightEntry(entries[currEntry], currEntry-offset); 
+			pushback(entries, currEntry, qtyEntries); 
+			--qtyEntries; 
+			drawPath(); 
+			drawObjects(entries, offset, qtyEntries); 
+			if (currEntry==qtyEntries-1) 
+			{ 
+				--currEntry; 
+				if (offset) --offset; 
+			} 
+			highlightEntry(entries[currEntry], currEntry-offset); }
 		else if (keypressed==keybinds.editfile)
-		{	editfname(&entries[currEntry], currEntry-offset); drawPath(); sortEntries(entries, qtyEntries); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset);	}
-		else if (keypressed==keybinds.savedir)
-		{	savePWD();	}
+		{	
+			editfname(&entries[currEntry], currEntry-offset); 
+			drawPath(); 
+			sortEntries(entries, qtyEntries); 
+			drawObjects(entries, offset, qtyEntries); 
+			highlightEntry(entries[currEntry], currEntry-offset);	
+		}
+		else if (keypressed==keybinds.savedir) savePWD();
 		else if (keypressed==keybinds.loaddir)
-		{	loadsavedPWD(); freeFileList(entries, qtyEntries); entries = getFileList(&qtyEntries); sortEntries(entries, qtyEntries); drawPath(); drawObjects(entries, offset, qtyEntries); currEntry = offset = 0; highlightEntry(entries[0], currEntry-offset); }
+		{	
+			loadsavedPWD(); 
+			freeFileList(entries, qtyEntries); 
+			entries = getFileList(&qtyEntries); 
+			sortEntries(entries, qtyEntries); 
+			drawPath(); 
+			drawObjects(entries, offset, qtyEntries); 
+			currEntry = offset = 0; 
+			highlightEntry(entries[0], currEntry-offset); 
+		}
 		else if (keypressed==15)
-		{	drawSettings(&keybinds); drawPath(); drawObjects(entries, offset, qtyEntries); highlightEntry(entries[currEntry], currEntry-offset);	}
+		{	
+			drawSettings(&keybinds); 
+			drawPath(); 
+			drawObjects(entries, offset, qtyEntries); 
+			highlightEntry(entries[currEntry], currEntry-offset);	
+		}
 	}
 	endwin();
 	return 0;
