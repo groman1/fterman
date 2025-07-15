@@ -1,11 +1,11 @@
+size:
+	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D SIZE -lncurses
 alphabetic:
 	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D ALPHABETIC -lncurses
 lastmodified:
 	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D LASTMODIFIED -lncurses
 lastaccessed:
 	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D LASTACCESSED -lncurses
-size:
-	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D SIZE -lncurses
 debug:
 	cc src/main.c src/settings.c src/xmltools.c -D SIZE -D NORAW -o fterman-g -lncurses -g
 cleanmain:

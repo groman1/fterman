@@ -14,6 +14,9 @@ struct keybind_s
 	keybind_t savedir;
 	keybind_t loaddir;
 	keybind_t quit;
+	keybind_t copy;
+	keybind_t cut;
+	keybind_t paste;
 };
 
 struct keybind_s loadKeybinds();

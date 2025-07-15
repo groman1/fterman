@@ -16,6 +16,9 @@ struct keybind_s
 	keybind_t savedir;
 	keybind_t loaddir;
 	keybind_t quit;
+	keybind_t copy;
+	keybind_t cut;
+	keybind_t paste;
 };
 
 xml *config;
@@ -35,11 +38,13 @@ unsigned char getShortLen(unsigned short num)
 void keybind_tToStr(keybind_t keybind, char *dest)
 {
 	unsigned short multiplier = 1, len = getShortLen(keybind)-1;
+	dest[len+1] = 0;
 	while (keybind/multiplier)
 	{
 		dest[len--] = keybind/multiplier%10+48;
 		multiplier*=10;
 	}
+	
 }
 
 keybind_t strTokeybind_t(char *string)
@@ -93,6 +98,9 @@ struct keybind_s loadKeybinds()
 	keybinds.savedir = strTokeybind_t(config->dataArr[6].value.str);
 	keybinds.loaddir = strTokeybind_t(config->dataArr[7].value.str);
 	keybinds.quit = strTokeybind_t(config->dataArr[8].value.str);
+	keybinds.copy = strTokeybind_t(config->dataArr[9].value.str);
+	keybinds.cut = strTokeybind_t(config->dataArr[10].value.str);
+	keybinds.paste = strTokeybind_t(config->dataArr[11].value.str);
 	free(confstring);
 	fclose(configFile);
 	return keybinds;
@@ -114,7 +122,7 @@ void drawSettings(struct keybind_s *keybinds)
 	clear();
 	printw("Keybinds (press q to exit)\n");
 	if (has_colors()) init_pair(3, COLOR_BLACK, COLOR_GREEN);
-	printw("Move up an entry\nMove down an entry\nOpen file or directory\nRename file\nDelete file\nGo back a directory\nSave current path\nLoad saved path\nQuit");
+	printw("Move up an entry\nMove down an entry\nOpen file or directory\nRename file\nDelete file\nGo back a directory\nSave current path\nLoad saved path\nQuit\nCopy\nCut\nPaste");
 	highlightSetting(0);
 
 	keybind_t ch;
@@ -125,7 +133,7 @@ void drawSettings(struct keybind_s *keybinds)
 			case 10: 
 			{	bindSetting(currLine);	ch = getch(); config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); keybind_tToStr(ch, config->dataArr[currLine].value.str); highlightSetting(currLine); break;	}
 			case 258:
-			{	if (currLine<8) { dehighlightSetting(currLine); highlightSetting(++currLine); } break;	}
+			{	if (currLine<11) { dehighlightSetting(currLine); highlightSetting(++currLine); } break;	}
 			case 259:
 			{	if (currLine>0) { dehighlightSetting(currLine); highlightSetting(--currLine); } break;	}
 			default: break;

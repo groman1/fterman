@@ -9,8 +9,8 @@
 #define DIRECTORYCOLOR 1
 #define SYMLINKCOLOR 2
 
-int color = 0, maxx, maxy, pwdlen;
-char *pwd, *savedpwd;
+int color = 0, maxx, maxy, pwdlen, keepoldFile;
+char *pwd, *savedpwd, *filecppwd;
 
 typedef struct
 {
@@ -160,11 +160,34 @@ void savePWD()
 	strcpy(savedpwd, pwd);
 }
 
+void savecpPWD(char *entry)
+{
+	filecppwd = realloc(filecppwd, pwdlen+fnamelen(entry)+1);
+	strcpy(filecppwd, pwd);
+	strcat(filecppwd, "/");
+	strcat(filecppwd, entry);
+}
+
 void loadsavedPWD()
 {
 	free(pwd);
 	pwd = malloc(strlen(savedpwd));
 	strcpy(pwd, savedpwd);
+}
+
+void copycutFile(int keepoldFile)
+{
+	char *command = malloc(5+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 5 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname)
+	char cp[] = "cp -r ";
+	char mv[] = "mv ";
+	if (keepoldFile) strcpy(command, cp);
+	else strcpy(command, mv);
+	strcat(command, filecppwd);
+	strcat(command, " ");
+	strcat(command, pwd);
+	strcat(command, "/");
+	system(command);
+	free(command);
 }
 
 void drawPath()
@@ -458,7 +481,7 @@ void editfname(entry_t *entry, int offset)
 	strcpy(oldname, entry->name);
 	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
 	
-	int currFileSizeLen = getIntLen(entry->data.st_size);
+	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = fnamelen(oldname);;
 	
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
@@ -474,6 +497,8 @@ void editfname(entry_t *entry, int offset)
 			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
 			case 263:
 			{	if (filenameLen) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
+			case 27:
+			{	attroff(A_REVERSE|COLOR_PAIR(currPair)); entry->name = realloc(entry->name, initialFileStrLen); strcpy(entry->name, oldname); curs_set(0);	free(oldname); return;	}
 			case 260:
 			{	if (currIndex+1) {--currIndex; } break;	}
 			case 261: 
@@ -529,7 +554,7 @@ int main()
 {
 	struct keybind_s keybinds = loadKeybinds();
 	initscr();
-#ifndef NORAW // so you can ctrl+c out of the program
+#ifndef NORAW // so you can ctrl+c out of the program, conflicts with default copy keybind
 	raw();
 #endif
 	curs_set(0);
@@ -555,6 +580,7 @@ int main()
 	strcpy(savedpwd, pwd);
 
 	int qtyEntries = 0, currEntry = 0, offset = 0;
+	keepoldFile = -1;
 	char *backpwd = NULL;
 	entry_t *entries = getFileList(&qtyEntries);
 	drawPath();
@@ -613,7 +639,8 @@ int main()
 				entries = getFileList(&qtyEntries); 
 				currEntry = findentry(backpwd, entries, qtyEntries); 
 				offset = currEntry>maxy/2?currEntry-maxy/2:0;  
-				drawObjects(entries, offset, qtyEntries); highlightEntry(entries[0], currEntry-offset); 
+				drawObjects(entries, offset, qtyEntries);
+				highlightEntry(entries[0], currEntry-offset); 
 			}	
 		}
 		else if (keypressed==keybinds.deletefile)
@@ -656,6 +683,29 @@ int main()
 			drawPath(); 
 			drawObjects(entries, offset, qtyEntries); 
 			highlightEntry(entries[currEntry], currEntry-offset);	
+		}
+		else if (keypressed==keybinds.copy)
+		{
+			keepoldFile = 1;
+			savecpPWD(entries[currEntry].name);
+		}
+		else if (keypressed==keybinds.cut)
+		{
+			keepoldFile = 0;
+			savecpPWD(entries[currEntry].name);
+		}
+		else if (keypressed==keybinds.paste)
+		{
+			if (keepoldFile!=-1)
+			{
+				copycutFile(keepoldFile);
+				drawPath();
+				entries = getFileList(&qtyEntries);
+				sortEntries(entries, qtyEntries);
+				drawObjects(entries, offset, qtyEntries);
+				highlightEntry(entries[currEntry], currEntry-offset);
+			}
+			if (keepoldFile==0) keepoldFile = -1;
 		}
 	}
 	endwin();
