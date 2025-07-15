@@ -171,7 +171,8 @@ void savecpPWD(char *entry)
 void loadsavedPWD()
 {
 	free(pwd);
-	pwd = malloc(strlen(savedpwd));
+	pwdlen = strlen(savedpwd);
+	pwd = malloc(pwdlen);
 	strcpy(pwd, savedpwd);
 }
 
@@ -669,12 +670,12 @@ int main()
 		else if (keypressed==keybinds.loaddir)
 		{	
 			loadsavedPWD(); 
-			freeFileList(entries, qtyEntries); 
+			if (entries) freeFileList(entries, qtyEntries); 
 			entries = getFileList(&qtyEntries); 
 			sortEntries(entries, qtyEntries); 
 			drawPath(); 
-			drawObjects(entries, offset, qtyEntries); 
 			currEntry = offset = 0; 
+			drawObjects(entries, offset, qtyEntries); 
 			highlightEntry(entries[0], currEntry-offset); 
 		}
 		else if (keypressed==15)

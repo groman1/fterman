@@ -16,6 +16,8 @@ install:
 	install -d /etc/fterman
 	install -m 666 example.conf /etc/fterman/fterman.conf
 	mv fterman /usr/bin
+update:
+	mv fterman /usr/bin
 uninstall:
 	rm -r /etc/fterman
 	rm /usr/bin/fterman
