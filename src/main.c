@@ -178,15 +178,15 @@ void loadsavedPWD()
 
 void copycutFile(int keepoldFile)
 {
-	char *command = malloc(5+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 5 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname)
-	char cp[] = "cp -r ";
-	char mv[] = "mv ";
+	char *command = malloc(9+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 9 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname) + 4 for quotes
+	char cp[] = "cp -r \"";
+	char mv[] = "mv \"";
 	if (keepoldFile) strcpy(command, cp);
 	else strcpy(command, mv);
 	strcat(command, filecppwd);
-	strcat(command, " ");
+	strcat(command, "\" \"");
 	strcat(command, pwd);
-	strcat(command, "/");
+	strcat(command, "/\"");
 	system(command);
 	free(command);
 }
