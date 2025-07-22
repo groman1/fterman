@@ -20,7 +20,7 @@ typedef struct
 
 unsigned char fnamelen(char *fname)
 {
-	for (int i = 1; i<256; ++i)
+	for (int i = 0; i<256; ++i)
 	{
 		if (fname[i]==0)
 		{
@@ -53,10 +53,11 @@ void pushback(entry_t *entries, int startingIndex, int qtyEntries)
 
 void strPushback(char *string, int startingIndex)
 {
-	for (; string[startingIndex]; ++startingIndex)
+	for (; string[startingIndex+1]; ++startingIndex)
 	{
 		string[startingIndex] = string[startingIndex+1];
 	}
+	string[startingIndex] = 0;
 }
 
 void strPushfwd(char *string, int startingIndex, int stringLen) // assume string is reallocated properly
@@ -156,7 +157,7 @@ void highlightEntry(entry_t entry, int offset)
 void savePWD()
 {
 	free(savedpwd);
-	savedpwd = malloc(pwdlen);
+	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
 }
 
@@ -338,7 +339,6 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 			printw("..");
 			currLen+=2;
 		}
-		attroff(COLOR_PAIR(currPair));
 
 		sprintf(sizestr, "%lu", entries[i].data.st_size);
 		for (int x = 0; x<maxx-currLen-fnamelen(sizestr)-1; ++x)
@@ -346,6 +346,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 			printw(" ");
 		}
 		printw("%s", sizestr);
+		attroff(COLOR_PAIR(currPair));
 
 		move(i-offset+2, 0);
 	}
@@ -403,7 +404,9 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 	}
 	else
 	{
-		char *editor = getenv("EDITOR"), *command = "";
+		char *editor = getenv("EDITOR");
+		if (!editor) return entries; // EDITOR environment variable has to be set in order for this to work
+		char *command = "";
 		int size, currSize;
 		command = malloc(fnamelen(editor)+1);
 		for (size = 0; editor[size]; ++size)
@@ -455,34 +458,36 @@ void deleteFile(char *file)
 	free(command);
 }
 
-void printName(char *name, int lenSize, int offset, int currIndex)
+void printName(char *name, int fileSizeLen, int offset, int currIndex)
 {
 	move(1+offset, 0);
 	int i = fnamelen(name);
-	if (i+lenSize+2>=maxx)
+	if (i+fileSizeLen+2>=maxx)
 	{
 		printw("..");
-		i -= maxx-lenSize-4;
+		i -= maxx-fileSizeLen-4;
 	}
 	else i = 0;
-	for (; name[i]; ++i)
-	{
-		printw("%c", name[i]);
-	}
-	if (i+lenSize+2<maxx)
+	printw("%s", &name[i]);
+	i = fnamelen(name);
+	if (i+fileSizeLen+2<maxx)
 	{
 		mvprintw(1+offset, i, " ");
 		move(1+offset, currIndex+1);
+	}
+	else
+	{
+		move(1+offset, maxx-(i-currIndex)-4);
 	}
 }
 
 void editfname(entry_t *entry, int offset)
 {
-	char *oldname = malloc(fnamelen(entry->name));
+	char *oldname = malloc(fnamelen(entry->name)+1);
 	strcpy(oldname, entry->name);
 	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
 	
-	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = fnamelen(oldname);;
+	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = fnamelen(oldname)+1;
 	
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
@@ -497,9 +502,9 @@ void editfname(entry_t *entry, int offset)
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
 			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
 			case 263:
-			{	if (filenameLen) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
+			{	if (currIndex+1) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
 			case 27:
-			{	attroff(A_REVERSE|COLOR_PAIR(currPair)); entry->name = realloc(entry->name, initialFileStrLen); strcpy(entry->name, oldname); curs_set(0);	free(oldname); return;	}
+			{	attroff(A_REVERSE|COLOR_PAIR(currPair)); entry->name = realloc(entry->name, initialFileStrLen); strcpy(entry->name, oldname); curs_set(0); free(oldname); return;	}
 			case 260:
 			{	if (currIndex+1) {--currIndex; } break;	}
 			case 261: 
@@ -577,7 +582,7 @@ int main()
 	strcpy(pwd, temppwd);
 	pwd[pwdlen++] = '/';
 	pwd[pwdlen] = 0;
-	savedpwd = malloc(pwdlen);
+	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
 
 	int qtyEntries = 0, currEntry = 0, offset = 0;
@@ -708,6 +713,7 @@ int main()
 			}
 			if (keepoldFile==0) keepoldFile = -1;
 		}
+		getmaxyx(stdscr, maxy, maxx);
 	}
 	endwin();
 	return 0;
