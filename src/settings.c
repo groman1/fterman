@@ -1,4 +1,4 @@
-#include <ncurses.h>
+#include "rawtui.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include "xmltools.h"
@@ -9,10 +9,10 @@ struct keybind_s
 {
 	keybind_t goUp;
 	keybind_t goDown;
-	keybind_t goBack;
 	keybind_t goFwd;
 	keybind_t editfile;
 	keybind_t deletefile;
+	keybind_t goBack;
 	keybind_t savedir;
 	keybind_t loaddir;
 	keybind_t quit;
@@ -58,19 +58,23 @@ keybind_t strTokeybind_t(char *string)
 	return keybind;
 }
 
-void bindSetting(int offset)
+void bindSetting(int offset, char *setting)
 {
-	mvchgat(1+offset, 0, -1, A_NORMAL, 3, NULL);
+	wrattr(COLORPAIR(3));
+	moveprint(1+offset, 0, setting);
+	wrattr(NORMAL);
 }
 
-void highlightSetting(int offset)
+void highlightSetting(int offset, char *setting)
 {
-	mvchgat(1+offset, 0, -1, A_REVERSE, 0, NULL);
+	wrattr(REVERSE);
+	moveprint(1+offset, 0, setting);
+	wrattr(NORMAL);
 }
 
-void dehighlightSetting(int offset)
+void dehighlightSetting(int offset, char *setting)
 {
-	mvchgat(1+offset, 0, -1, A_NORMAL, 0, NULL);
+	moveprint(1+offset, 0, setting);
 }
 
 struct keybind_s loadKeybinds()
@@ -91,10 +95,10 @@ struct keybind_s loadKeybinds()
 	config = config->dataArr->value.xmlVal;	// IF THE PROGRAM CRASHES HERE, YOU DIDNT CREATE THE CONFIG FILE
 	keybinds.goUp = strTokeybind_t(config->dataArr[0].value.str);
 	keybinds.goDown = strTokeybind_t(config->dataArr[1].value.str);
-	keybinds.goBack = strTokeybind_t(config->dataArr[2].value.str);
-	keybinds.goFwd = strTokeybind_t(config->dataArr[3].value.str);
-	keybinds.editfile = strTokeybind_t(config->dataArr[4].value.str);
-	keybinds.deletefile = strTokeybind_t(config->dataArr[5].value.str);
+	keybinds.goFwd = strTokeybind_t(config->dataArr[2].value.str);
+	keybinds.editfile = strTokeybind_t(config->dataArr[3].value.str);
+	keybinds.deletefile = strTokeybind_t(config->dataArr[4].value.str);
+	keybinds.goBack = strTokeybind_t(config->dataArr[5].value.str);
 	keybinds.savedir = strTokeybind_t(config->dataArr[6].value.str);
 	keybinds.loaddir = strTokeybind_t(config->dataArr[7].value.str);
 	keybinds.quit = strTokeybind_t(config->dataArr[8].value.str);
@@ -120,22 +124,23 @@ void drawSettings(struct keybind_s *keybinds)
 {
 	int currLine = 0;
 	clear();
-	printw("Keybinds (press q to exit)\n");
-	if (has_colors()) init_pair(3, COLOR_BLACK, COLOR_GREEN);
-	printw("Move up an entry\nMove down an entry\nOpen file or directory\nRename file\nDelete file\nGo back a directory\nSave current path\nLoad saved path\nQuit\nCopy\nCut\nPaste");
-	highlightSetting(0);
+	moveprint(0,0, "Keybinds (press q to exit)\n");
+	initcolorpair(3, BLACK, GREEN);
+	char *settings[] = { "Move up an entry", "Move down an entry", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste" };
+	for (int i = 0; i<12; ++i) moveprint(1+i, 0, settings[i]);
 
+	highlightSetting(0, settings[0]);
 	keybind_t ch;
-	while((ch=getch())!=keybinds->quit)
+	while((ch=inesc())!=keybinds->quit)
 	{
 		switch (ch)
 		{
-			case 10: 
-			{	bindSetting(currLine);	ch = getch(); config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); keybind_tToStr(ch, config->dataArr[currLine].value.str); highlightSetting(currLine); break;	}
-			case 258:
-			{	if (currLine<11) { dehighlightSetting(currLine); highlightSetting(++currLine); } break;	}
-			case 259:
-			{	if (currLine>0) { dehighlightSetting(currLine); highlightSetting(--currLine); } break;	}
+			case 13: 
+			{	bindSetting(currLine, settings[currLine]);	ch = inesc(); config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); keybind_tToStr(ch, config->dataArr[currLine].value.str); highlightSetting(currLine, settings[currLine]); break;	}
+			case 189:
+			{	if (currLine<11) { dehighlightSetting(currLine, settings[currLine]); highlightSetting(++currLine, settings[currLine+1]); } break;	}
+			case 188:
+			{	if (currLine>0) { dehighlightSetting(currLine, settings[currLine]); highlightSetting(--currLine, settings[currLine-1]); } break;	}
 			default: break;
 		}
 	}

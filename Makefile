@@ -1,13 +1,13 @@
 size:
-	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D SIZE -lncurses
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D SIZE
 alphabetic:
-	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D ALPHABETIC -lncurses
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D ALPHABETIC
 lastmodified:
-	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D LASTMODIFIED -lncurses
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D LASTMODIFIED
 lastaccessed:
-	cc src/main.c src/settings.c src/xmltools.c -O2 -o fterman -D LASTACCESSED -lncurses
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D LASTACCESSED
 debug:
-	cc src/main.c src/settings.c src/xmltools.c -D SIZE -D NORAW -o fterman-g -lncurses -g
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -D SIZE -D NORAW -o fterman-g -g
 cleanmain:
 	rm main
 cleandebug:

@@ -8,7 +8,7 @@ typedef struct {
 
 typedef struct xmlStruct xml;
 typedef struct xmlValueStruct xmlValue;
-
+typedef unsigned char bool;
 
 struct xmlValueStruct {
 	char *tagName;

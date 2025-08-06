@@ -5,10 +5,10 @@ How to install:
 # Default keybinds
 Up/Down arrows: move between entries\
 Left arrow: go back a directory\
-Right arrow/Enter: open a file/directory\
-Del: delete currently selected file/directory\
+Right arrow: open a file/directory\
+Delete: delete currently selected file/directory\
 F2: edit file/directory name\
-Ctrl+E: save current directory\
+Ctrl+S: save current directory\
 Ctrl+L: load saved directory\
 Ctrl+O: open bind settings\
 Ctrl+C: copy a file\

@@ -7,10 +7,10 @@ struct keybind_s
 {
 	keybind_t goUp;
 	keybind_t goDown;
-	keybind_t goBack;
 	keybind_t goFwd;
 	keybind_t editfile;
 	keybind_t deletefile;
+	keybind_t goBack;
 	keybind_t savedir;
 	keybind_t loaddir;
 	keybind_t quit;

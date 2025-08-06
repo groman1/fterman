@@ -1,15 +1,19 @@
-#include <ncurses.h>
+#include "rawtui.h"
+#include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "settings.h"
 
 #define REGFILECOLOR 0
 #define DIRECTORYCOLOR 1
 #define SYMLINKCOLOR 2
 
-int color = 0, maxx, maxy, pwdlen, keepoldFile;
+uint16_t color = 0, maxx, maxy, pwdlen;
+int8_t keepoldFile;
 char *pwd, *savedpwd, *filecppwd;
 
 typedef struct
@@ -17,18 +21,6 @@ typedef struct
 	char *name;
 	struct stat data;
 } entry_t;
-
-unsigned char fnamelen(char *fname)
-{
-	for (int i = 0; i<256; ++i)
-	{
-		if (fname[i]==0)
-		{
-		return i;
-		}
-	}
-	return 0;
-}
 
 unsigned char getIntLen(long long input)
 {
@@ -120,38 +112,58 @@ char *strccat(char *string1, char *string2)
 	return result;
 }
 
-void deHighlightEntry(entry_t entry, int offset)
+void printName(char *name, int fileSizeLen, int offset, int currIndex)
 {
-	move(offset+1, 0);
-	if (S_ISDIR(entry.data.st_mode))
+	move(1+offset, 0);
+	int i = strlen(name);
+	if (i+fileSizeLen+2>=maxx)
 	{
-		chgat(-1, A_NORMAL, DIRECTORYCOLOR, NULL);
+		print("..");
+		i -= maxx-fileSizeLen-4;
 	}
-	else if (S_ISLNK(entry.data.st_mode))
+	else i = 0;
+	dprintf(STDOUT_FILENO, "%s", &name[i]);
+	i = strlen(name);
+	if (i+fileSizeLen+2<maxx)
 	{
-		chgat(-1, A_NORMAL, SYMLINKCOLOR, NULL);
+		wrattr(NORMAL);
+		moveprint(1+offset, i, " ");
+		move(1+offset, currIndex+1);
 	}
 	else
 	{
-		chgat(-1, A_NORMAL, REGFILECOLOR, NULL);
+		move(1+offset, maxx-(i-currIndex)-4);
 	}
+}
+
+void printFileSize(long long size, int offset)
+{
+	move(1+offset, maxx-getIntLen(size));
+	dprintf(STDOUT_FILENO, "%lld", size);
+}
+
+void deHighlightEntry(entry_t entry, int offset)
+{
+	move(offset+1, 0);
+	if (S_ISDIR(entry.data.st_mode)) wrattr(NORMAL|COLORPAIR(DIRECTORYCOLOR));
+	else if (S_ISLNK(entry.data.st_mode)) wrattr(NORMAL|COLORPAIR(SYMLINKCOLOR));
+	else wrattr(NORMAL|COLORPAIR(REGFILECOLOR));
+	clearline();
+	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
+	printFileSize(entry.data.st_size, offset);
+	wrattr(NORMAL);
 }
 
 void highlightEntry(entry_t entry, int offset)
 {
 	move(offset+1, 0);
-	if (S_ISDIR(entry.data.st_mode))
-	{
-		chgat(-1, A_REVERSE, DIRECTORYCOLOR, NULL);
-	}
-	else if (S_ISLNK(entry.data.st_mode))
-	{
-		chgat(-1, A_REVERSE, SYMLINKCOLOR, NULL);
-	}
-	else
-	{
-		chgat(-1, A_REVERSE, REGFILECOLOR, NULL);
-	}
+	if (S_ISDIR(entry.data.st_mode)) wrattr(REVERSE|COLORPAIR(DIRECTORYCOLOR));
+	else if (S_ISLNK(entry.data.st_mode)) wrattr(REVERSE|COLORPAIR(SYMLINKCOLOR));
+	else wrattr(REVERSE|COLORPAIR(REGFILECOLOR));
+	clearline();
+	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
+	printFileSize(entry.data.st_size, offset);
+	wrattr(NORMAL);
 }
 
 void savePWD()
@@ -163,7 +175,7 @@ void savePWD()
 
 void savecpPWD(char *entry)
 {
-	filecppwd = realloc(filecppwd, pwdlen+fnamelen(entry)+1);
+	filecppwd = realloc(filecppwd, pwdlen+strlen(entry)+1);
 	strcpy(filecppwd, pwd);
 	strcat(filecppwd, "/");
 	strcat(filecppwd, entry);
@@ -196,13 +208,13 @@ void drawPath()
 {
 	clear();
 	move(0,0);
-	if (pwdlen<maxx) printw("%s ", pwd);
+	if (pwdlen<maxx) dprintf(STDOUT_FILENO, "%s ", pwd);
 	else 
 	{
 	
 		for (int i = 0; i<maxx-2; ++i)
 		{
-			printw("%c", pwd[i]);
+			dprintf(STDOUT_FILENO, "%c", pwd[i]);
 		}
 	}
 }
@@ -228,7 +240,7 @@ void sortEntries(entry_t *entries, int qtyEntries)
 			}
 		}
 	}	
-#elifdef LASTACCESED
+#elifdef LASTACCESSED
 	while (!sorted)
 	{
 		sorted = 1;
@@ -297,7 +309,7 @@ entry_t *getFileList(int *qtyEntries)
 		fileName = strccat(pwd, entry->d_name);
 		stat(fileName, &fileList[currEntry].data);
 		free(fileName);
-		currLength = fnamelen(entry->d_name);
+		currLength = strlen(entry->d_name);
 		fileList[currEntry].name = malloc(currLength+1);
 		for (int i = 0; i<=currLength; fileList[currEntry].name[i] = entry->d_name[i], ++i);
 		fileList = realloc(fileList, (++currEntry+1)*sizeof(entry_t));
@@ -322,39 +334,23 @@ void freeFileList(entry_t *fileList, int qtyEntries)
 void drawObjects(entry_t *entries, int offset, int qtyEntries)
 {
 	move(1,0);
-	int currPair, currLen;
-	char *sizestr = malloc(20);
-	for (int i = offset; i<qtyEntries; ++i)
+	int currPair;
+	for (int i = offset; i<qtyEntries&&i-offset<maxy-1; ++i)
 	{
 		if (S_ISDIR(entries[i].data.st_mode)) currPair = DIRECTORYCOLOR;
 		else if (S_ISLNK(entries[i].data.st_mode)) currPair = SYMLINKCOLOR;
 		else currPair = REGFILECOLOR;
-		attron(COLOR_PAIR(currPair));
-		for (currLen = 0; currLen<maxx-4-getIntLen(entries[i].data.st_size)&&entries[i].name[currLen]; ++currLen)
-		{
-			printw("%c", entries[i].name[currLen]);
-		}
-		if (entries[i].name[currLen]) 
-		{	
-			printw("..");
-			currLen+=2;
-		}
-
-		sprintf(sizestr, "%lu", entries[i].data.st_size);
-		for (int x = 0; x<maxx-currLen-fnamelen(sizestr)-1; ++x)
-		{
-			printw(" ");
-		}
-		printw("%s", sizestr);
-		attroff(COLOR_PAIR(currPair));
-
+		wrattr(COLORPAIR(currPair));
+		printName(entries[i].name, strlen(entries[i].name), i-offset, 0);
+		printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
+	wrattr(NORMAL);
 }
 
 void accessdenied()
 {
-	mvprintw(1,0,"Access denied");
+	moveprint(1,0,"Access denied");
 }
 
 char *goback(char *backpath)
@@ -378,7 +374,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 	if (!*qtyEntries) return entries;
 	if (S_ISDIR(entries[*entryID].data.st_mode))
 	{
-		pwd = realloc(pwd, pwdlen+fnamelen(entries[*entryID].name)+2);
+		pwd = realloc(pwd, pwdlen+strlen(entries[*entryID].name)+2);
 		for (int i = 0; entries[*entryID].name[i]; ++i)
 		{
 			pwd[pwdlen++] = entries[*entryID].name[i];
@@ -392,7 +388,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 			drawPath();
 			sortEntries(entries, *qtyEntries);
 			drawObjects(entries, 0, *qtyEntries);
-			highlightEntry(entries[0], 0);
+			if (*qtyEntries) highlightEntry(entries[0], 0);
 		}
 		else
 		{
@@ -408,7 +404,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 		if (!editor) return entries; // EDITOR environment variable has to be set in order for this to work
 		char *command = "";
 		int size, currSize;
-		command = malloc(fnamelen(editor)+1);
+		command = malloc(strlen(editor)+1);
 		for (size = 0; editor[size]; ++size)
 		{
 			command[size] = editor[size];
@@ -420,15 +416,15 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 			command[size+currSize] = pwd[currSize];
 		}
 		size += currSize;
-		command = realloc(command, size+1+fnamelen(entries[*entryID].name));
+		command = realloc(command, size+1+strlen(entries[*entryID].name));
 		for (currSize = 0; entries[*entryID].name[currSize]; ++currSize)
 		{
 			command[size+currSize] = entries[*entryID].name[currSize];
 		}
 		command[size+currSize] = 0;
-		endwin();
+		deinit();
 		system(command);
-		initscr();
+		init();
 		drawPath();
 		int offset = *entryID>maxy/2?*entryID-maxy/2:0;
 		drawObjects(entries, offset, *qtyEntries);
@@ -439,7 +435,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 
 void deleteFile(char *file)
 {
-	char *command = malloc(7+pwdlen+fnamelen(file));
+	char *command = malloc(7+pwdlen+strlen(file));
 	char initial[] = "rm -rf ";
 	for (int i = 0; initial[i]; ++i)
 	{
@@ -453,70 +449,45 @@ void deleteFile(char *file)
 	{
 		command[7+pwdlen+i] = file[i];
 	}
-	command[7+pwdlen+fnamelen(file)] = 0;
+	command[7+pwdlen+strlen(file)] = 0;
 	system(command);
 	free(command);
 }
 
-void printName(char *name, int fileSizeLen, int offset, int currIndex)
-{
-	move(1+offset, 0);
-	int i = fnamelen(name);
-	if (i+fileSizeLen+2>=maxx)
-	{
-		printw("..");
-		i -= maxx-fileSizeLen-4;
-	}
-	else i = 0;
-	printw("%s", &name[i]);
-	i = fnamelen(name);
-	if (i+fileSizeLen+2<maxx)
-	{
-		mvprintw(1+offset, i, " ");
-		move(1+offset, currIndex+1);
-	}
-	else
-	{
-		move(1+offset, maxx-(i-currIndex)-4);
-	}
-}
-
 void editfname(entry_t *entry, int offset)
 {
-	char *oldname = malloc(fnamelen(entry->name)+1);
+	char *oldname = malloc(strlen(entry->name)+1);
 	strcpy(oldname, entry->name);
-	int ch, currIndex = fnamelen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
+	int ch, currIndex = strlen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
 	
-	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = fnamelen(oldname)+1;
+	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = strlen(oldname)+1;
 	
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
-	attron(A_REVERSE|COLOR_PAIR(currPair));
+	deHighlightEntry(*entry, offset);
 
-	curs_set(1);
+	setcursor(1);
 	printName(entry->name, currFileSizeLen, offset, currIndex);
-	while((ch=getch())&&ch!=10)
+	while((ch=inesc())&&ch!=10&&ch!=13)
 	{
 		switch(ch)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
 			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
-			case 263:
+			case 127:
 			{	if (currIndex+1) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
-			case 27:
-			{	attroff(A_REVERSE|COLOR_PAIR(currPair)); entry->name = realloc(entry->name, initialFileStrLen); strcpy(entry->name, oldname); curs_set(0); free(oldname); return;	}
-			case 260:
+			case 3:
+			{	wrattr(NORMAL); entry->name = realloc(entry->name, initialFileStrLen); strcpy(entry->name, oldname); setcursor(0); free(oldname); return;	}
+			case 191:
 			{	if (currIndex+1) {--currIndex; } break;	}
-			case 261: 
+			case 190: 
 			{	if (currIndex<filenameLen-1) { ++currIndex; } break; }
 			default: break;
 		}
 		printName(entry->name, currFileSizeLen, offset, currIndex);
 	}
-	attroff(A_REVERSE|COLOR_PAIR(currPair));
 
-
-	char *command = malloc(5+2*pwdlen+fnamelen(oldname)+fnamelen(entry->name)); // "mv "(3 bytes) + pwd + old filename + " " (1 byte) + pwd + new filename. As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
+	char *command = malloc(5+2*pwdlen+strlen(oldname)+strlen(entry->name)); // "mv "(3 bytes) + pwd + old filename + " " (1 byte) + pwd + new filename. As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
 	char mv[] = "mv ";
 	for (int i = 0; mv[i]; ++i)
 	{
@@ -530,19 +501,19 @@ void editfname(entry_t *entry, int offset)
 	{
 		command[3+pwdlen+i] = oldname[i];
 	}
-	command[3+pwdlen+fnamelen(oldname)] = ' ';
+	command[3+pwdlen+strlen(oldname)] = ' ';
 	for (int i = 0; pwd[i]; ++i)
 	{
-		command[4+pwdlen+fnamelen(oldname)+i] = pwd[i];
+		command[4+pwdlen+strlen(oldname)+i] = pwd[i];
 	}
 	for (int i = 0; entry->name[i]; ++i)
 	{
-		command[4+2*pwdlen+fnamelen(oldname)+i] = entry->name[i];
+		command[4+2*pwdlen+strlen(oldname)+i] = entry->name[i];
 	}
-	command[5+2*pwdlen+fnamelen(oldname)+fnamelen(entry->name)] = 0;
+	command[5+2*pwdlen+strlen(oldname)+strlen(entry->name)] = 0;
 	system(command);
 
-	curs_set(0);
+	setcursor(0);
 	free(oldname);
 	free(command);
 }
@@ -559,21 +530,12 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 int main()
 {
 	struct keybind_s keybinds = loadKeybinds();
-	initscr();
-#ifndef NORAW // so you can ctrl+c out of the program, conflicts with default copy keybind
-	raw();
-#endif
-	curs_set(0);
-	if (has_colors())
-	{
-		color = 1;
-		start_color();
-		init_pair(DIRECTORYCOLOR, COLOR_BLUE, COLOR_BLACK); // directory color
-		init_pair(SYMLINKCOLOR, COLOR_CYAN, COLOR_BLACK); // symlink color
-	}
-	noecho();
-	keypad(stdscr, 1);
-	getmaxyx(stdscr, maxy, maxx);
+	init();
+	setcursor(0);
+	color = 1;
+	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
+	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
+	getTermXY(&maxy, &maxx);
 
 	keybind_t keypressed;
 	char *temppwd = getenv("PWD");
@@ -593,7 +555,7 @@ int main()
 	drawObjects(entries, 0, qtyEntries);
 	highlightEntry(entries[0], 0);
 
-	while (keypressed=getch())
+	while (keypressed=inesc())
 	{
 		if (keypressed==keybinds.quit)
 		{	break;	}
@@ -611,7 +573,7 @@ int main()
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				++currEntry; 
-				if (currEntry-offset>maxy-2)
+				if (currEntry-offset>maxy-3&&currEntry<qtyEntries)
 				{
 					++offset; 
 					drawPath(); 
@@ -626,7 +588,7 @@ int main()
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				--currEntry; 
-				if (currEntry-offset<0)
+				if (currEntry-offset-1<0&&currEntry>0)
 				{	
 					--offset; 
 					drawPath(); 
@@ -646,7 +608,7 @@ int main()
 				currEntry = findentry(backpwd, entries, qtyEntries); 
 				offset = currEntry>maxy/2?currEntry-maxy/2:0;  
 				drawObjects(entries, offset, qtyEntries);
-				highlightEntry(entries[0], currEntry-offset); 
+				highlightEntry(entries[currEntry], currEntry-offset); 
 			}	
 		}
 		else if (keypressed==keybinds.deletefile)
@@ -662,7 +624,8 @@ int main()
 				--currEntry; 
 				if (offset) --offset; 
 			} 
-			highlightEntry(entries[currEntry], currEntry-offset); }
+			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset); 
+		}
 		else if (keypressed==keybinds.editfile)
 		{	
 			editfname(&entries[currEntry], currEntry-offset); 
@@ -681,14 +644,14 @@ int main()
 			drawPath(); 
 			currEntry = offset = 0; 
 			drawObjects(entries, offset, qtyEntries); 
-			highlightEntry(entries[0], currEntry-offset); 
+			if (qtyEntries) highlightEntry(entries[0], currEntry-offset); 
 		}
 		else if (keypressed==15)
 		{	
 			drawSettings(&keybinds); 
 			drawPath(); 
 			drawObjects(entries, offset, qtyEntries); 
-			highlightEntry(entries[currEntry], currEntry-offset);	
+			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);	
 		}
 		else if (keypressed==keybinds.copy)
 		{
@@ -713,8 +676,9 @@ int main()
 			}
 			if (keepoldFile==0) keepoldFile = -1;
 		}
-		getmaxyx(stdscr, maxy, maxx);
+		getTermXY(&maxy, &maxx);
 	}
-	endwin();
+	setcursor(1);
+	deinit();
 	return 0;
 }
