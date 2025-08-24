@@ -1,22 +1,23 @@
-size:
+main: alphabetic
+size: 
 	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D SIZE
-alphabetic:
+alphabetic: 
 	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D ALPHABETIC
-lastmodified:
+lastmodified: 
 	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D LASTMODIFIED
-lastaccessed:
+lastaccessed: 
 	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D LASTACCESSED
-debug:
-	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -D SIZE -D NORAW -o fterman-g -g
-cleanmain:
+debug: 
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -D ALPHABETIC -o fterman-g -g
+cleanmain: 
 	rm main
-cleandebug:
+cleandebug: 
 	rm debug
 install:
 	install -d /etc/fterman
 	install -m 666 example.conf /etc/fterman/fterman.conf
 	mv fterman /usr/bin
-update:
+update: 
 	mv fterman /usr/bin
 uninstall:
 	rm -r /etc/fterman

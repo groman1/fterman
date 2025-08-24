@@ -223,24 +223,7 @@ void sortEntries(entry_t *entries, int qtyEntries)
 {
 	int sorted = 0;
 	entry_t tempentry;
-
-#ifdef ALPHABETIC
-	while (!sorted)
-	{
-		sorted = 1;
-		for (int i = 0; i<qtyEntries-1; ++i)
-		{
-			if (fnamecmp(entries[i].name, entries[i+1].name))
-			{
-				tempentry = entries[i+1];
-				entries[i+1] = entries[i];
-				entries[i] = tempentry;
-				sorted = 0;
-				break;
-			}
-		}
-	}	
-#elifdef LASTACCESSED
+#ifdef LASTACCESSED
 	while (!sorted)
 	{
 		sorted = 1;
@@ -285,6 +268,7 @@ void sortEntries(entry_t *entries, int qtyEntries)
 			}
 		}
 	}
+#elifdef ALPHABETIC
 #else 
 #error "SORTINGMETHOD not set properly"
 #endif
@@ -292,17 +276,22 @@ void sortEntries(entry_t *entries, int qtyEntries)
 
 entry_t *getFileList(int *qtyEntries)
 {
-	struct dirent *entry = malloc(sizeof(struct dirent));
 	DIR *dir;
 	char *fileName;
 	entry_t *fileList = malloc(sizeof(entry_t));
 	int currEntry = 0, currLength;
 
-	if (!(dir = opendir(pwd)))
-	{ 
-		return 0;
-	}
+#ifndef ALPHABETIC
+	if (!(dir = opendir(pwd))) return 0;
+	struct dirent *entry = malloc(sizeof(struct dirent));
 	while (entry=readdir(dir))
+#else
+	struct dirent **entries, *entry;
+	int n = scandir(pwd, &entries, NULL, alphasort);
+	if (n==-1) return 0;
+	entry = entries[0];
+	for (int i = 0; i<n; entry = entries[++i])
+#endif
 	{
 		if (!strcmp(entry->d_name, "..")) continue;
 		if (!strcmp(entry->d_name, ".")) continue;
@@ -314,10 +303,12 @@ entry_t *getFileList(int *qtyEntries)
 		for (int i = 0; i<=currLength; fileList[currEntry].name[i] = entry->d_name[i], ++i);
 		fileList = realloc(fileList, (++currEntry+1)*sizeof(entry_t));
 	}
+	*qtyEntries = currEntry;
+#ifndef ALPHABETIC
 	free(entry);
 	free(dir);
-	*qtyEntries = currEntry;
 	sortEntries(fileList, currEntry);
+#endif
 	return fileList;
 }
 
