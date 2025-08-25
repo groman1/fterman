@@ -13,4 +13,6 @@ Ctrl+L: load saved directory\
 Ctrl+O: open bind settings\
 Ctrl+C: copy a file\
 Ctrl+X: cut a file\
-Ctrl+V: paste a copied or cut file
+Ctrl+V: paste a copied or cut file\
+/: search\
+?: show all entries (cancel search)

@@ -36,9 +36,16 @@ void init()
 	cfmakeraw(&terminal);
 	tcsetattr(STDIN_FILENO, 0, &terminal);
 	initcolorpair(0, WHITE, BLACK);
-	write(STDOUT_FILENO, "\x1b[224;75;170", 12);
-	write(STDOUT_FILENO, "\x1b[224;75;170", 12);
-	write(STDOUT_FILENO, "\x1b[?1049h", 8);
+	write(STDOUT_FILENO, "\x1b[?1049h", 8); // alternative buffer
+}
+
+void initinline()
+{
+	tcgetattr(STDIN_FILENO, &originalterminal);
+	struct termios terminal;
+	cfmakeraw(&terminal);
+	tcsetattr(STDIN_FILENO, 0, &terminal);
+	initcolorpair(0, WHITE, BLACK);
 }
 
 void deinit()
@@ -101,7 +108,6 @@ uint8_t inesc()
 					case 'Q': ret = 171; break; // F2
 					case 'R': ret = 172; break; // F3
 					case 'S': ret = 173; break; // F4
-					default: *(int*)0 = 0;
 				}
 				break;
 			}
@@ -170,6 +176,11 @@ void clear()
 	write(STDOUT_FILENO, "\x1b[2J", 4);
 }
 
+void cleartobot()
+{
+	write(STDOUT_FILENO, "\x1bJ", 3);
+}
+
 void getTermXY(uint16_t *y, uint16_t *x)
 {
 	struct winsize win;
@@ -209,9 +220,20 @@ void clearline()
 	write(STDOUT_FILENO, "\x1b[2K", 4);
 }
 
+void printsize(char *string, int len)
+{
+	write(STDOUT_FILENO, string, len);
+}
+
+void moveprintsize(uint16_t y, uint16_t x, char *string, int len)
+{
+	move(y,x);
+	printsize(string, len);
+}
+
 void print(char *string)
 {
-	write(STDOUT_FILENO, string, strlen(string));
+	printsize(string, strlen(string));
 }
 
 void moveprint(uint16_t y, uint16_t x, char *string)

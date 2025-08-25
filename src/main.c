@@ -249,6 +249,8 @@ void sortEntries(entry_t *entries, int qtyEntries)
 int dirfilter(const struct dirent *entry)
 {
 	if (entry->d_name[0]=='.'&&(entry->d_name[1]==0||(entry->d_name[1]=='.'&&entry->d_name[2]==0))) return 0;
+
+	if (!strcasestr(entry->d_name, filter)) return 0;
 	char *fullpath;
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
@@ -260,6 +262,7 @@ int dirfilter(const struct dirent *entry)
 
 int filefilter(const struct dirent *entry)
 {
+	if (!strcasestr(entry->d_name, filter)) return 0;
 	char *fullpath;
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
@@ -349,6 +352,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		if (S_ISDIR(entries[i].data.st_mode)) currPair = DIRECTORYCOLOR;
 		else if (S_ISLNK(entries[i].data.st_mode)) currPair = SYMLINKCOLOR;
 		else currPair = REGFILECOLOR;
+		clearline();
 		wrattr(COLORPAIR(currPair));
 		printName(entries[i].name, strlen(entries[i].name), i-offset, 0);
 		printFileSize(entries[i].data.st_size, i-offset);
@@ -364,6 +368,8 @@ void accessdenied()
 
 char *goback(char *backpath)
 {
+	filter = realloc(filter, 1);
+	filter[0] = 0;
 	int i;
 	for (i = pwdlen-2; pwd[i]!='/'; --i);
 	backpath = realloc(backpath, pwdlen-++i);
@@ -380,6 +386,8 @@ char *goback(char *backpath)
 
 entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 {
+	filter = realloc(filter, 1);
+	filter[0] = 0;
 	if (!*qtyEntries) return entries;
 	if (S_ISDIR(entries[*entryID].data.st_mode))
 	{
@@ -536,13 +544,58 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 	return -1;
 }
 
+void search(entry_t *entries, int *qtyEntries)
+{
+	moveprint(maxy, 0, ":");
+	uint8_t filterlen = 0, keypressed;
+	setcursor(1);
+	while((keypressed=inesc()))
+	{
+		switch (keypressed)
+		{
+			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
+			{ 
+				if (filterlen<255)
+				{
+					filter = realloc(filter, ++filterlen+1); 
+					filter[filterlen-1] = keypressed;
+					filter[filterlen] = 0;
+					clearline();
+					moveprint(maxy, 0, ":");
+					moveprint(maxy, 1, filter);
+				}
+				break;
+			}
+			case 127:
+			{
+				if (filterlen)
+				{
+					filter = realloc(filter, --filterlen+1); 
+					filter[filterlen] = 0;
+					clearline();
+					moveprint(maxy, 0, ":");
+					moveprint(maxy, 1, filter);
+				}
+				break;
+			}
+			case 13: case 10:
+			{ 
+				setcursor(0); 
+				return; 
+			}
+		}
+	}
+}
+
 int main()
 {
 	struct keybind_s keybinds = loadKeybinds();
 	color = 1;
 	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
 	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
+	initcolorpair(3, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
+	--maxy; // to fit the search bar
 
 	keybind_t keypressed;
 	char *temppwd = getenv("PWD");
@@ -553,6 +606,8 @@ int main()
 	pwd[pwdlen] = 0;
 	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
+	filter = malloc(1);
+	filter[0] = 0;
 
 	int qtyEntries = 0, currEntry = 0, offset = 0;
 	keepoldFile = -1;
@@ -584,7 +639,6 @@ int main()
 				if (currEntry-offset>maxy-3&&currEntry<qtyEntries)
 				{
 					++offset; 
-					drawPath(); 
 					drawObjects(entries, offset, qtyEntries); 
 				}
 				highlightEntry(entries[currEntry], currEntry-offset); 
@@ -599,7 +653,6 @@ int main()
 				if (currEntry-offset-1<0&&currEntry>0)
 				{	
 					--offset; 
-					drawPath(); 
 					drawObjects(entries, offset, qtyEntries); 
 				}
 				highlightEntry(entries[currEntry], currEntry-offset); 
@@ -610,8 +663,8 @@ int main()
 			if (pwdlen>1) 
 			{	
 				backpwd = goback(backpwd);
-				drawPath();  
 				if (entries) freeFileList(entries, qtyEntries); 
+				drawPath();
 				entries = getFileList(&qtyEntries); 
 				currEntry = findentry(backpwd, entries, qtyEntries); 
 				offset = currEntry>maxy/2?currEntry-maxy/2:0;  
@@ -625,7 +678,6 @@ int main()
 			deHighlightEntry(entries[currEntry], currEntry-offset); 
 			pushback(entries, currEntry, qtyEntries); 
 			--qtyEntries; 
-			drawPath(); 
 			drawObjects(entries, offset, qtyEntries); 
 			if (currEntry==qtyEntries-1) 
 			{ 
@@ -637,11 +689,10 @@ int main()
 		else if (keypressed==keybinds.editfile)
 		{	
 			editfname(&entries[currEntry], currEntry-offset); 
-			drawPath(); 
 			freeFileList(entries, qtyEntries);
 			entries = getFileList(&qtyEntries);
 			drawObjects(entries, offset, qtyEntries); 
-			highlightEntry(entries[currEntry], currEntry-offset);	
+			highlightEntry(entries[currEntry], currEntry-offset);
 		}
 		else if (keypressed==keybinds.savedir) savePWD();
 		else if (keypressed==keybinds.loaddir)
@@ -649,14 +700,13 @@ int main()
 			loadsavedPWD(); 
 			if (entries) freeFileList(entries, qtyEntries); 
 			entries = getFileList(&qtyEntries); 
-			drawPath(); 
 			currEntry = offset = 0; 
 			drawObjects(entries, offset, qtyEntries); 
 			if (qtyEntries) highlightEntry(entries[0], currEntry-offset); 
 		}
 		else if (keypressed==15)
 		{	
-			drawSettings(&keybinds); 
+			keybinds = drawSettings(); 
 			drawPath(); 
 			drawObjects(entries, offset, qtyEntries); 
 			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);	
@@ -676,7 +726,6 @@ int main()
 			if (keepoldFile!=-1)
 			{
 				copycutFile(keepoldFile);
-				drawPath();
 				freeFileList(entries, qtyEntries);
 				entries = getFileList(&qtyEntries);
 				drawObjects(entries, offset, qtyEntries);
@@ -684,12 +733,37 @@ int main()
 			}
 			if (keepoldFile==0) keepoldFile = -1;
 		}
+		else if (keypressed==keybinds.search)
+		{
+			currEntry = 0;
+			offset = 0;
+			search(entries, &qtyEntries);
+			drawPath();
+			freeFileList(entries, qtyEntries);
+			entries = getFileList(&qtyEntries);
+			drawObjects(entries, offset, qtyEntries); 
+			highlightEntry(entries[currEntry], currEntry-offset);
+		}
+		else if (keypressed==keybinds.cancelsearch)
+		{
+			currEntry = 0;
+			offset = 0;
+			filter = realloc(filter, 1);
+			filter[0] = 0;
+			drawPath();
+			freeFileList(entries, qtyEntries);
+			entries = getFileList(&qtyEntries);
+			drawObjects(entries, offset, qtyEntries); 
+			highlightEntry(entries[currEntry], currEntry-offset);
+		}
 		getTermXY(&maxy, &maxx);
 	}
+
 	freeFileList(entries, qtyEntries);
 	free(savedpwd);
 	free(pwd);
 	free(backpwd);
+	free(filter);
 	freeConfig();
 	setcursor(1);
 	deinit();

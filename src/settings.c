@@ -19,6 +19,8 @@ struct keybind_s
 	keybind_t copy;
 	keybind_t cut;
 	keybind_t paste;
+	keybind_t search;
+	keybind_t cancelsearch;
 };
 
 xml *config;
@@ -106,6 +108,8 @@ struct keybind_s loadKeybinds()
 	keybinds.copy = strTokeybind_t(config->dataArr[9].value.str);
 	keybinds.cut = strTokeybind_t(config->dataArr[10].value.str);
 	keybinds.paste = strTokeybind_t(config->dataArr[11].value.str);
+	keybinds.search = strTokeybind_t(config->dataArr[12].value.str);
+	keybinds.cancelsearch = strTokeybind_t(config->dataArr[13].value.str);
 	free(confstring);
 	fclose(configFile);
 	return keybinds;
@@ -114,10 +118,10 @@ struct keybind_s loadKeybinds()
 void saveKeybinds()
 {
 	configFile = fopen("/etc/fterman/fterman.conf", "w+");
-	config = config->parent;
 	char *configString = xmlToString(config);
-	fprintf(configFile, "%s", configString);
+	fputs(configString, configFile);
 	fclose(configFile);
+	free(configString);
 	freeXML(config);
 }
 
@@ -126,30 +130,29 @@ void freeConfig()
 	freeXML(config);
 }
 
-void drawSettings(struct keybind_s *keybinds)
+struct keybind_s drawSettings()
 {
 	int currLine = 0;
 	clear();
 	moveprint(0,0, "Keybinds (press q to exit)\n");
-	initcolorpair(3, BLACK, GREEN);
-	char *settings[] = { "Move up an entry", "Move down an entry", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste" };
-	for (int i = 0; i<12; ++i) moveprint(1+i, 0, settings[i]);
+	char *settings[] = { "Move up an entry", "Move down an entry", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry" };
+	for (int i = 0; i<14; ++i) moveprint(1+i, 0, settings[i]);
 
 	highlightSetting(0, settings[0]);
 	keybind_t ch;
-	while((ch=inesc())!=keybinds->quit)
+	while((ch=inesc())!='q')
 	{
 		switch (ch)
 		{
 			case 13: 
 			{	bindSetting(currLine, settings[currLine]);	ch = inesc(); config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); keybind_tToStr(ch, config->dataArr[currLine].value.str); highlightSetting(currLine, settings[currLine]); break;	}
 			case 189:
-			{	if (currLine<11) { dehighlightSetting(currLine, settings[currLine]); highlightSetting(++currLine, settings[currLine+1]); } break;	}
+			{	if (currLine<13) { dehighlightSetting(currLine, settings[currLine]); highlightSetting(++currLine, settings[currLine+1]); } break;	}
 			case 188:
 			{	if (currLine>0) { dehighlightSetting(currLine, settings[currLine]); highlightSetting(--currLine, settings[currLine-1]); } break;	}
 			default: break;
 		}
 	}
 	saveKeybinds();
-	*keybinds = loadKeybinds();
+	return loadKeybinds();
 }

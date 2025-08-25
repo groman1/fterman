@@ -17,11 +17,13 @@ struct keybind_s
 	keybind_t copy;
 	keybind_t cut;
 	keybind_t paste;
+	keybind_t search;
+	keybind_t cancelsearch;
 };
 
 struct keybind_s loadKeybinds();
 void saveKeybinds();
 void freeConfig();
-void drawSettings(struct keybind_s *keybinds);
+struct keybind_s drawSettings();
 
 #endif

@@ -58,7 +58,7 @@ void fillHead(xml *ptr)
 char *xmlToString(xml *ptrold)
 {
 	xml *ptr = ptrold->parent;
-	if (ptr->dataArr[0].tagName[0]!=0) return "";
+	if (ptr->parent!=0) return "";
 	xml *currPtr = ptr->dataArr->value.xmlVal;
 	int currTag = 0;
 	char *string = malloc(1);
@@ -194,8 +194,9 @@ goback:
 	return string;
 }
 
-void freeXML(xml *xmlDocument)
+void freeXMLNested(xml *xmlDocument, int valueIndex)
 {
+	xmlDocument = xmlDocument->dataArr[valueIndex].value.xmlVal;
 	int currTag = 0;
 	while(!(currTag==xmlDocument->tagQty&&xmlDocument->parent->tagQty==-1))
 	{
@@ -240,23 +241,36 @@ void freeXML(xml *xmlDocument)
 		}
 	}
 	free(xmlDocument->dataArr);
+	free(xmlDocument);
+	
+}
+
+void freeXML(xml *xmlDocument)
+{
 	xmlDocument = xmlDocument->parent;
-	free(xmlDocument->dataArr->value.xmlVal);
+	freeXMLNested(xmlDocument, 0);
 	free(xmlDocument->dataArr);
 	free(xmlDocument);
 	xmlDocument = 0;
 }
 
-void freeXMLValue(xmlValue *value, int nestedCleared)
+void freeXMLValue(xml *ptr, int index)
 {
-	for (int i = 0; i<value->argsQty; ++i)
+	for (int i = 0; i<ptr->dataArr[index].argsQty; ++i)
 	{
-		free(value->args[i].attr);
-		free(value->args[i].value);
+		free(ptr->dataArr[index].args[i].attr);
+		free(ptr->dataArr[index].args[i].value);
 	}
-	free(value->args);
-	free(value->tagName);
-	if (!nestedCleared) free(value->value.str);
+	free(ptr->dataArr[index].args);
+	free(ptr->dataArr[index].tagName);
+	if (ptr->dataArr[index].isNesting) 
+	{
+		int tempQty = ptr->tagQty;
+		ptr->tagQty = -1;	// freeXMLNested uses tag with tagQty = -1 as head tag, some tricking here
+		freeXMLNested(ptr, index);
+		ptr->tagQty = tempQty;
+	}
+	else free(ptr->dataArr[index].value.str);
 }
 
 void copyElement(xml *ptr, xmlValue value, int position)
@@ -287,26 +301,20 @@ void copyElement(xml *ptr, xmlValue value, int position)
 	}
 }
 
-/*int removeElement(xml *ptr, int index)
+int removeElement(xml *ptr, int index)
 {
 	if (index>ptr->tagQty-1) return 1;
 	--ptr->tagQty;
+	freeXMLValue(ptr, index);
 
-	if (ptr->dataArr[index].isNesting)	
-	{
-		freeXML(ptr->dataArr[index].value.xmlVal);				// DOES NOT WORK CURRENTLY
-		freeXMLValue(&ptr->dataArr[index], 1);
-	}
-	else freeXMLValue(&ptr->dataArr[index], 0);
-
-	for (int i = index; i<=ptr->tagQty; ++i)
+	for (int i = index; i<ptr->tagQty; ++i)
 	{
 		ptr->dataArr[i] = ptr->dataArr[i+1];
 	}
-	ptr->dataArr = realloc(ptr->dataArr, ptr->tagQty);
+	ptr->dataArr = realloc(ptr->dataArr, ptr->tagQty*sizeof(xmlValue));
 
 	return 0;
-}*/
+}
 
 int insertElement(xml *ptr, xmlValue value, int index)
 {

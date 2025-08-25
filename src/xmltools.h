@@ -35,9 +35,9 @@ char *xmlToString(xml *ptr);
 void fillEmptyXML(xml *ptr);
 xml *parseXML(char *string);
 void freeXML(xml *xmlDocument);
-void freeXMLValue(xmlValue *value, int nestingCleared);
+void freeXMLValue(xml *ptr, int index);
 void copyElement(xml *ptr, xmlValue value, int position);
-//int removeElement(xml *ptr, int index);					// DOES NOT WORK CURRENTLY
+int removeElement(xml *ptr, int index);
 int insertElement(xml *ptr, xmlValue value, int index);
 int findElement(xml *ptr, char *textToFind);
 int swapElements(xml *ptr, int firstElemId, int secondElemId);
