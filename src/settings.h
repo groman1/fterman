@@ -1,7 +1,7 @@
 #ifndef SETTINGS_H_
 #define SETTINGS_H_
 
-#define keybind_t unsigned short
+#define keybind_t unsigned char
 
 struct keybind_s
 {
@@ -21,6 +21,7 @@ struct keybind_s
 
 struct keybind_s loadKeybinds();
 void saveKeybinds();
+void freeConfig();
 void drawSettings(struct keybind_s *keybinds);
 
 #endif

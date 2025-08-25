@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #define bool unsigned char
 
@@ -39,7 +40,7 @@ void fillDefault(xmlValue *val)
 	val->args->value = malloc(1);
 }
 
-void fillEmptyXML(xml *ptr, xml *parent) // leave parent at NULL if the tag is at top level
+void fillEmptyXML(xml *ptr, xml *parent)
 {
 	ptr->parent = parent;
 	ptr->tagQty = 1;
@@ -47,18 +48,16 @@ void fillEmptyXML(xml *ptr, xml *parent) // leave parent at NULL if the tag is a
 	fillDefault(ptr->dataArr);
 }
 
-void appendElement(xml *ptr, xmlValue value)
+void fillHead(xml *ptr)
 {
-	ptr->dataArr = realloc(ptr->dataArr, ptr->tagQty++*sizeof(xmlValue));
-	ptr->dataArr[ptr->tagQty-1].tagName = value.tagName;
-	ptr->dataArr[ptr->tagQty-1].argsQty = value.argsQty;
-	ptr->dataArr[ptr->tagQty-1].args = value.args;
-	ptr->dataArr[ptr->tagQty-1].value.str = value.value.str;
-	ptr->dataArr[ptr->tagQty-1].isNesting = value.isNesting;
+	ptr->parent = 0;
+	ptr->tagQty = -1;
+	ptr->dataArr = malloc(sizeof(xmlValue));
 }
 
-char *xmlToString(xml *ptr)
+char *xmlToString(xml *ptrold)
 {
+	xml *ptr = ptrold->parent;
 	if (ptr->dataArr[0].tagName[0]!=0) return "";
 	xml *currPtr = ptr->dataArr->value.xmlVal;
 	int currTag = 0;
@@ -198,62 +197,167 @@ goback:
 void freeXML(xml *xmlDocument)
 {
 	int currTag = 0;
-	xml *currPtr = xmlDocument->dataArr->value.xmlVal;
-	while(!(currTag==currPtr->tagQty&&currPtr->parent==xmlDocument))
+	while(!(currTag==xmlDocument->tagQty&&xmlDocument->parent->tagQty==-1))
 	{
-		free(currPtr->dataArr[currTag].tagName);
-		for (int i = 0; i<currPtr->dataArr[currTag].argsQty; ++i)
+		free(xmlDocument->dataArr[currTag].tagName);
+		for (int i = 0; i<xmlDocument->dataArr[currTag].argsQty; ++i)
 		{
-			free(currPtr->dataArr[currTag].args[i].attr);
-			free(currPtr->dataArr[currTag].args[i].value);
+			free(xmlDocument->dataArr[currTag].args[i].attr);
+			free(xmlDocument->dataArr[currTag].args[i].value);
 		}
-		free(currPtr->dataArr[currTag].args);
-		if (!currPtr->dataArr[currTag].isNesting)
+		free(xmlDocument->dataArr[currTag].args);
+		if (!xmlDocument->dataArr[currTag].isNesting)
 		{
-			if (currTag<currPtr->tagQty-1)
+			free(xmlDocument->dataArr[currTag].value.str);
+			if (currTag<xmlDocument->tagQty-1)
 			{
 				++currTag;
-				free(currPtr->dataArr[currTag].value.str);
 			}
 			else
 			{
 				do
 				{
-					for (int i = 0; i<currPtr->parent->tagQty; ++i)
+					for (int i = 0; i<xmlDocument->parent->tagQty; ++i)
 					{
-						if (currPtr->parent->dataArr[i].value.xmlVal==currPtr)
+						if (xmlDocument->parent->dataArr[i].value.xmlVal==xmlDocument)
 						{
 							currTag = i;
-							free(currPtr->dataArr[i].value.xmlVal->dataArr);
-							free(currPtr->dataArr[i].value.xmlVal);
-							currPtr = currPtr->parent;
+							free(xmlDocument->dataArr);
+							xmlDocument = xmlDocument->parent;
+							free(xmlDocument->dataArr[i].value.xmlVal);
 							break;
 						}
 					}
 				}
-				while(currTag>=currPtr->parent->tagQty-1&&currPtr->parent!=xmlDocument);
+				while(currTag>=xmlDocument->parent->tagQty-1&&xmlDocument->tagQty==-1);
 				++currTag;
 			}
 		}
 		else
 		{
-			currPtr = currPtr->dataArr[currTag].value.xmlVal;
+			xmlDocument = xmlDocument->dataArr[currTag].value.xmlVal;
 			currTag = 0;
 		}
 	}
-	free(xmlDocument->dataArr->args->attr);
-	free(xmlDocument->dataArr->args->value);
+	free(xmlDocument->dataArr);
+	xmlDocument = xmlDocument->parent;
 	free(xmlDocument->dataArr->value.xmlVal);
 	free(xmlDocument->dataArr);
 	free(xmlDocument);
+	xmlDocument = 0;
+}
+
+void freeXMLValue(xmlValue *value, int nestedCleared)
+{
+	for (int i = 0; i<value->argsQty; ++i)
+	{
+		free(value->args[i].attr);
+		free(value->args[i].value);
+	}
+	free(value->args);
+	free(value->tagName);
+	if (!nestedCleared) free(value->value.str);
+}
+
+void copyElement(xml *ptr, xmlValue value, int position)
+{
+	ptr->dataArr[position].tagName = malloc(strlen(value.tagName)+1);
+	strcpy(ptr->dataArr[position].tagName, value.tagName);
+
+	ptr->dataArr[position].argsQty = value.argsQty;
+	ptr->dataArr[position].args = malloc(sizeof(xmlArgs)*value.argsQty);
+	for (int i = 0; i<value.argsQty; ++i)
+	{
+		ptr->dataArr[position].args[i].attr = malloc(strlen(value.args[i].attr)+1);
+		ptr->dataArr[position].args[i].value = malloc(strlen(value.args[i].value)+1);
+
+		strcpy(ptr->dataArr[position].args[i].attr, value.args[i].attr);
+		strcpy(ptr->dataArr[position].args[i].value, value.args[i].value);
+	}
+
+	ptr->dataArr[position].isNesting = value.isNesting;
+	if (value.isNesting)
+	{
+		ptr->dataArr[position].value.xmlVal = value.value.xmlVal;
+	}
+	else
+	{
+		ptr->dataArr[position].value.str = malloc(strlen(value.value.str)+1);
+		strcpy(ptr->dataArr[position].value.str, value.value.str);
+	}
+}
+
+/*int removeElement(xml *ptr, int index)
+{
+	if (index>ptr->tagQty-1) return 1;
+	--ptr->tagQty;
+
+	if (ptr->dataArr[index].isNesting)	
+	{
+		freeXML(ptr->dataArr[index].value.xmlVal);				// DOES NOT WORK CURRENTLY
+		freeXMLValue(&ptr->dataArr[index], 1);
+	}
+	else freeXMLValue(&ptr->dataArr[index], 0);
+
+	for (int i = index; i<=ptr->tagQty; ++i)
+	{
+		ptr->dataArr[i] = ptr->dataArr[i+1];
+	}
+	ptr->dataArr = realloc(ptr->dataArr, ptr->tagQty);
+
+	return 0;
+}*/
+
+int insertElement(xml *ptr, xmlValue value, int index)
+{
+	if (index>ptr->tagQty) return 1;
+	else if (index==ptr->tagQty) 
+	{
+		ptr->dataArr = realloc(ptr->dataArr, ++ptr->tagQty*sizeof(xmlValue));
+
+		copyElement(ptr, value, ptr->tagQty-1);
+	}
+	else
+	{
+		ptr->dataArr =  realloc(ptr->dataArr, ++ptr->tagQty*sizeof(xmlValue));
+		for (int i = ptr->tagQty; i>index; --i)
+		{
+			ptr->dataArr[i] = ptr->dataArr[i-1];
+		}
+		copyElement(ptr, value, index);
+	}
+	return 0;
+}
+
+int findElement(xml *ptr, char *textToFind)
+{
+	for (int i = 0; i<ptr->tagQty; ++i)
+	{
+		if (!strcmp(ptr->dataArr[i].tagName, textToFind)) return i;
+	}
+	return -1;
+}
+
+int swapElements(xml *ptr, int firstElemId, int secondElemId)
+{
+	if (firstElemId>=ptr->tagQty||secondElemId>=ptr->tagQty||firstElemId<0||secondElemId<0) return 1;
+	xmlValue tempvalue = ptr->dataArr[firstElemId];
+	ptr->dataArr[firstElemId] = ptr->dataArr[secondElemId];
+	ptr->dataArr[secondElemId] = tempvalue;
+	return 0;
+}
+
+int nestElement(xml *ptr, xml *newptr, int index)
+{
+	if (!ptr->dataArr[index].isNesting) return 1;
+	newptr = ptr->dataArr[index].value.xmlVal;
+	return 0;
 }
 
 xml *parseXML(char *string)
 {
     xml *xmlDocument = malloc(sizeof(xml));
-	fillEmptyXML(xmlDocument, 0);
-	xmlDocument->tagQty = -1;
-	free(xmlDocument->dataArr->value.str);
+	fillHead(xmlDocument);
 	xml *currPtr = xmlDocument;
 	currPtr->dataArr->value.xmlVal = malloc(sizeof(xml));
 	currPtr = currPtr->dataArr->value.xmlVal;
@@ -264,12 +368,16 @@ xml *parseXML(char *string)
 		int opened = 0, quoteQty = 0, eqQty = 0;
 		for (len = 0; string[len]!='\0'; ++len)
 		{
-			if (string[len] == '<') ++opened;
-			else if (string[len] == '>') --opened;
+			if (string[len] == '<') opened+=3;
+			else if (string[len] == '>') opened-=2;
+			else if (string[len] == '/') opened-=2;
 			else if (string[len] == '"') ++quoteQty;
 			else if (string[len] == '=') ++eqQty; //check if all args have 2 quotes
 		}
-		if (opened||!len||(quoteQty!=eqQty<<1)) return (void*)2;
+		if (opened||!len||(quoteQty!=eqQty<<1))
+		{
+			return (xml*)(long long)((opened?1<<8:0)+(!len<<4)+(quoteQty!=eqQty<<1));
+		}
 	}
 #else
 	for (len = 0; string[len]!='\0'; ++len);
@@ -291,7 +399,6 @@ xml *parseXML(char *string)
 				else if (nested==0)
 				{
 					readValue = 0;
-					++nested;
 				}
 				for (int x = 0; string[i]!='>'; ++x, ++i)
 				{
@@ -308,7 +415,7 @@ xml *parseXML(char *string)
 					size = 0;
 				}
 			}
-			else if (!readValue&&string[i+1]!='/'&&currPtr->dataArr[0].tagName[0]!=0) //tag opening
+			else if (!readValue&&string[i+1]!='/'&&currPtr->dataArr[0].tagName[0]!='\0') //tag opening
 			{
 				++(currPtr->tagQty);
 				nested = 1;
@@ -409,5 +516,5 @@ xml *parseXML(char *string)
             }
         }
     }
-    return xmlDocument;
+    return xmlDocument->dataArr->value.xmlVal;
 }

@@ -8,7 +8,9 @@ lastmodified:
 lastaccessed: 
 	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman -D LASTACCESSED
 debug: 
-	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -D ALPHABETIC -o fterman-g -g
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -D SIZE -o fterman-g -g
+sanitize:
+	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -fsanitize=address -D SIZE -o fterman-g -g
 cleanmain: 
 	rm main
 cleandebug: 

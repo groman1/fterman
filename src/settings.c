@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "xmltools.h"
 
-#define keybind_t unsigned short
+#define keybind_t unsigned char
 
 struct keybind_s
 {
@@ -81,6 +81,8 @@ struct keybind_s loadKeybinds()
 {
 	struct keybind_s keybinds;
 	configFile = fopen("/etc/fterman/fterman.conf", "r");
+	if (!configFile)
+	{	printf("No config file detected, you probably didn't run make install. Read README.md\n"); exit(1);	}
 	char *confstring = malloc(1), buff;
 	int i;
 	for (i = 0; (buff=getc(configFile))!=EOF; ++i)
@@ -92,7 +94,6 @@ struct keybind_s loadKeybinds()
 	confstring[i] = 0;
 
 	config = parseXML(confstring);
-	config = config->dataArr->value.xmlVal;	// IF THE PROGRAM CRASHES HERE, YOU DIDNT CREATE THE CONFIG FILE
 	keybinds.goUp = strTokeybind_t(config->dataArr[0].value.str);
 	keybinds.goDown = strTokeybind_t(config->dataArr[1].value.str);
 	keybinds.goFwd = strTokeybind_t(config->dataArr[2].value.str);
@@ -117,6 +118,11 @@ void saveKeybinds()
 	char *configString = xmlToString(config);
 	fprintf(configFile, "%s", configString);
 	fclose(configFile);
+	freeXML(config);
+}
+
+void freeConfig()
+{
 	freeXML(config);
 }
 

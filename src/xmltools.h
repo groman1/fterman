@@ -1,6 +1,10 @@
 #ifndef XMLTOOLS_H_
 #define XMLTOOLS_H_
 
+#define bool unsigned char
+#define appendElement(ptr, value) insertElement(ptr, value, ptr->tagQty)
+#define initEmptyXML() parseXML("")
+
 typedef struct {
 	char *attr;
 	char *value;
@@ -8,7 +12,7 @@ typedef struct {
 
 typedef struct xmlStruct xml;
 typedef struct xmlValueStruct xmlValue;
-typedef unsigned char bool;
+
 
 struct xmlValueStruct {
 	char *tagName;
@@ -31,5 +35,12 @@ char *xmlToString(xml *ptr);
 void fillEmptyXML(xml *ptr);
 xml *parseXML(char *string);
 void freeXML(xml *xmlDocument);
+void freeXMLValue(xmlValue *value, int nestingCleared);
+void copyElement(xml *ptr, xmlValue value, int position);
+//int removeElement(xml *ptr, int index);					// DOES NOT WORK CURRENTLY
+int insertElement(xml *ptr, xmlValue value, int index);
+int findElement(xml *ptr, char *textToFind);
+int swapElements(xml *ptr, int firstElemId, int secondElemId);
+int nestElement(xml *ptr, xml *newptr, int index);
 
 #endif

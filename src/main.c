@@ -276,37 +276,32 @@ void sortEntries(entry_t *entries, int qtyEntries)
 
 entry_t *getFileList(int *qtyEntries)
 {
-	DIR *dir;
 	char *fileName;
-	entry_t *fileList = malloc(sizeof(entry_t));
-	int currEntry = 0, currLength;
-
+	entry_t *fileList;
+	int currEntry = 0, currLength, offset = 0; // offset is the number of "." and ".." currently found
+	struct dirent **entries;
 #ifndef ALPHABETIC
-	if (!(dir = opendir(pwd))) return 0;
-	struct dirent *entry = malloc(sizeof(struct dirent));
-	while (entry=readdir(dir))
+	int n = scandir(pwd, &entries, NULL, NULL);
 #else
-	struct dirent **entries, *entry;
 	int n = scandir(pwd, &entries, NULL, alphasort);
-	if (n==-1) return 0;
-	entry = entries[0];
-	for (int i = 0; i<n; entry = entries[++i])
 #endif
+	if (n==-1) return 0;
+	fileList = malloc(sizeof(entry_t)*(n-2));
+	for (int i = 0; i<n; ++i)
 	{
-		if (!strcmp(entry->d_name, "..")) continue;
-		if (!strcmp(entry->d_name, ".")) continue;
-		fileName = strccat(pwd, entry->d_name);
-		stat(fileName, &fileList[currEntry].data);
+		if (entries[i]->d_name[0]=='.'&&(entries[i]->d_name[1]==0||(entries[i]->d_name[1]=='.'&&entries[i]->d_name[2]==0)))
+		{	free(entries[i]); ++offset; continue;	}
+		fileName = strccat(pwd, entries[i]->d_name);
+		stat(fileName, &fileList[i-offset].data);
 		free(fileName);
-		currLength = strlen(entry->d_name);
-		fileList[currEntry].name = malloc(currLength+1);
-		for (int i = 0; i<=currLength; fileList[currEntry].name[i] = entry->d_name[i], ++i);
-		fileList = realloc(fileList, (++currEntry+1)*sizeof(entry_t));
+		currLength = strlen(entries[i]->d_name);
+		fileList[i-offset].name = malloc(currLength+1);
+		for (int x = 0; x<=currLength; fileList[i-offset].name[x] = entries[i]->d_name[x], ++x);
+		free(entries[i]);
 	}
-	*qtyEntries = currEntry;
+	*qtyEntries = n-2;
+	free(entries);
 #ifndef ALPHABETIC
-	free(entry);
-	free(dir);
 	sortEntries(fileList, currEntry);
 #endif
 	return fileList;
@@ -377,7 +372,6 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 		if (entries) 
 		{
 			drawPath();
-			sortEntries(entries, *qtyEntries);
 			drawObjects(entries, 0, *qtyEntries);
 			if (*qtyEntries) highlightEntry(entries[0], 0);
 		}
@@ -415,6 +409,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 		command[size+currSize] = 0;
 		deinit();
 		system(command);
+		free(command);
 		init();
 		drawPath();
 		int offset = *entryID>maxy/2?*entryID-maxy/2:0;
@@ -521,8 +516,6 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 int main()
 {
 	struct keybind_s keybinds = loadKeybinds();
-	init();
-	setcursor(0);
 	color = 1;
 	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
 	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
@@ -542,10 +535,11 @@ int main()
 	keepoldFile = -1;
 	char *backpwd = NULL;
 	entry_t *entries = getFileList(&qtyEntries);
+	init();
+	setcursor(0);
 	drawPath();
 	drawObjects(entries, 0, qtyEntries);
 	highlightEntry(entries[0], 0);
-
 	while (keypressed=inesc())
 	{
 		if (keypressed==keybinds.quit)
@@ -621,7 +615,8 @@ int main()
 		{	
 			editfname(&entries[currEntry], currEntry-offset); 
 			drawPath(); 
-			sortEntries(entries, qtyEntries); 
+			freeFileList(entries, qtyEntries);
+			entries = getFileList(&qtyEntries);
 			drawObjects(entries, offset, qtyEntries); 
 			highlightEntry(entries[currEntry], currEntry-offset);	
 		}
@@ -631,7 +626,6 @@ int main()
 			loadsavedPWD(); 
 			if (entries) freeFileList(entries, qtyEntries); 
 			entries = getFileList(&qtyEntries); 
-			sortEntries(entries, qtyEntries); 
 			drawPath(); 
 			currEntry = offset = 0; 
 			drawObjects(entries, offset, qtyEntries); 
@@ -660,8 +654,8 @@ int main()
 			{
 				copycutFile(keepoldFile);
 				drawPath();
+				freeFileList(entries, qtyEntries);
 				entries = getFileList(&qtyEntries);
-				sortEntries(entries, qtyEntries);
 				drawObjects(entries, offset, qtyEntries);
 				highlightEntry(entries[currEntry], currEntry-offset);
 			}
@@ -669,6 +663,11 @@ int main()
 		}
 		getTermXY(&maxy, &maxx);
 	}
+	freeFileList(entries, qtyEntries);
+	free(savedpwd);
+	free(pwd);
+	free(backpwd);
+	freeConfig();
 	setcursor(1);
 	deinit();
 	return 0;
