@@ -14,7 +14,7 @@
 
 uint16_t color = 0, maxx, maxy, pwdlen;
 int8_t keepoldFile;
-char *pwd, *savedpwd, *filecppwd;
+char *pwd, *filter, *savedpwd, *filecppwd;
 
 typedef struct
 {
@@ -60,39 +60,6 @@ void strPushfwd(char *string, int startingIndex, int stringLen) // assume string
 	}
 	string[stringLen+1] = 0;
 }
-
-
-#ifdef ALPHABETIC
-char toLower(char ch)
-{
-	if (ch>='A'&&ch<='Z') ch += 32;
-	return ch;
-}
-
-char fnamecmp(char *fname1, char *fname2)
-{
-	int i;
-	for (i = 0; fname1[i]&&fname2[i]; ++i)
-	{
-		if (toLower(fname1[i])>toLower(fname2[i]))
-		{
-			return 1;
-		}
-		else if (toLower(fname2[i])>toLower(fname1[i]))
-		{
-			return 0;
-		}
-	}
-	if (fname1[i])
-	{
-		return 0;
-	}
-	else
-	{
-		return 1;
-	}
-}
-#endif
 
 char *strccat(char *string1, char *string2)
 {
@@ -238,7 +205,8 @@ void sortEntries(entry_t *entries, int qtyEntries)
 			}
 		}
 	}
-#elifdef LASTMODIFIED
+#else 
+#ifdef LASTMODIFIED
 	while (!sorted)
 	{
 		sorted = 1;
@@ -253,7 +221,8 @@ void sortEntries(entry_t *entries, int qtyEntries)
 			}
 		}
 	}
-#elifdef SIZE
+#else
+#ifdef SIZE
 	while (!sorted)
 	{
 		sorted = 1;
@@ -268,10 +237,36 @@ void sortEntries(entry_t *entries, int qtyEntries)
 			}
 		}
 	}
-#elifdef ALPHABETIC
 #else 
+#ifndef ALPHABETIC
 #error "SORTINGMETHOD not set properly"
 #endif
+#endif
+#endif
+#endif
+}
+
+int dirfilter(const struct dirent *entry)
+{
+	if (entry->d_name[0]=='.'&&(entry->d_name[1]==0||(entry->d_name[1]=='.'&&entry->d_name[2]==0))) return 0;
+	char *fullpath;
+	fullpath = strccat(pwd, entry->d_name);
+	struct stat entrydata;
+	stat(fullpath, &entrydata);
+	free(fullpath);
+	if (S_ISDIR(entrydata.st_mode)) return 1;
+	return 0;
+}
+
+int filefilter(const struct dirent *entry)
+{
+	char *fullpath;
+	fullpath = strccat(pwd, entry->d_name);
+	struct stat entrydata;
+	stat(fullpath, &entrydata);
+	free(fullpath);
+	if (!S_ISDIR(entrydata.st_mode)) return 1;
+	return 0;
 }
 
 entry_t *getFileList(int *qtyEntries)
@@ -281,16 +276,14 @@ entry_t *getFileList(int *qtyEntries)
 	int currEntry = 0, currLength, offset = 0; // offset is the number of "." and ".." currently found
 	struct dirent **entries;
 #ifndef ALPHABETIC
-	int n = scandir(pwd, &entries, NULL, NULL);
+	int n = scandir(pwd, &entries, &dirfilter, NULL);
 #else
-	int n = scandir(pwd, &entries, NULL, alphasort);
+	int n = scandir(pwd, &entries, &dirfilter, alphasort);
 #endif
 	if (n==-1) return 0;
-	fileList = malloc(sizeof(entry_t)*(n-2));
+	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
 	{
-		if (entries[i]->d_name[0]=='.'&&(entries[i]->d_name[1]==0||(entries[i]->d_name[1]=='.'&&entries[i]->d_name[2]==0)))
-		{	free(entries[i]); ++offset; continue;	}
 		fileName = strccat(pwd, entries[i]->d_name);
 		stat(fileName, &fileList[i-offset].data);
 		free(fileName);
@@ -299,11 +292,41 @@ entry_t *getFileList(int *qtyEntries)
 		for (int x = 0; x<=currLength; fileList[i-offset].name[x] = entries[i]->d_name[x], ++x);
 		free(entries[i]);
 	}
-	*qtyEntries = n-2;
+	*qtyEntries = n;
 	free(entries);
+
 #ifndef ALPHABETIC
 	sortEntries(fileList, currEntry);
 #endif
+
+#ifndef ALPHABETIC
+	n = scandir(pwd, &entries, &filefilter, NULL);
+#else
+	n = scandir(pwd, &entries, &filefilter, alphasort);
+#endif
+
+	if (n==-1) return 0;
+	fileList = realloc(fileList, (*qtyEntries+n)*sizeof(entry_t));
+	offset = 0;
+
+	for (int i = 0; i<n; ++i)
+	{
+		fileName = strccat(pwd, entries[i]->d_name);
+		stat(fileName, &fileList[i-offset+*qtyEntries].data);
+		free(fileName);
+		currLength = strlen(entries[i]->d_name);
+		fileList[i-offset+*qtyEntries].name = malloc(currLength+1);
+		for (int x = 0; x<=currLength; fileList[i-offset+*qtyEntries].name[x] = entries[i]->d_name[x], ++x);
+		free(entries[i]);
+	}
+
+	*qtyEntries += n;
+	free(entries);
+
+#ifndef ALPHABETIC
+	sortEntries(fileList, currEntry);
+#endif
+
 	return fileList;
 }
 
