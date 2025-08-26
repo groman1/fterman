@@ -12,8 +12,14 @@
 #define DIRECTORYCOLOR 1
 #define SYMLINKCOLOR 2
 
+#define ALPHABETICGROUP 0
+#define SIZEGROUP 1
+#define ACCESSEDTIMEGROUP 2
+#define MODIFIEDTIMEGROUP 3
+
+int (*sortingfunction)(const struct dirent**, const struct dirent**);
 uint16_t maxx, maxy, pwdlen;
-int8_t keepoldFile;
+int8_t keepoldFile, sortingmethod;
 char *pwd, *filter, *savedpwd, *filecppwd;
 
 typedef struct
@@ -61,7 +67,7 @@ void strPushfwd(char *string, int startingIndex, int stringLen) // assume string
 	string[stringLen+1] = 0;
 }
 
-char *strccat(char *string1, char *string2)
+char *strccat(char *string1, const char *string2)
 {
 	char *result = malloc(1);
 	int x, i;
@@ -142,7 +148,7 @@ void savePWD()
 
 void savecpPWD(char *entry)
 {
-	filecppwd = realloc(filecppwd, pwdlen+strlen(entry)+1);
+	filecppwd = realloc(filecppwd, pwdlen+strlen(entry)+2);
 	strcpy(filecppwd, pwd);
 	strcat(filecppwd, "/");
 	strcat(filecppwd, entry);
@@ -158,7 +164,7 @@ void loadsavedPWD()
 
 void copycutFile(int keepoldFile)
 {
-	char *command = malloc(9+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 9 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname) + 4 for quotes
+	char *command = malloc(10+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 9 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname) + 4 for quotes
 	char cp[] = "cp -r \"";
 	char mv[] = "mv \"";
 	if (keepoldFile) strcpy(command, cp);
@@ -191,64 +197,69 @@ void drawPath()
 	}
 }
 
-void sortEntries(entry_t *entries, int qtyEntries)
+char toLower(char ch)
 {
-	int sorted = 0;
-	entry_t tempentry;
-#ifdef LASTACCESSED
-	while (!sorted)
+	if (ch>='A'&&ch<='Z') return ch+32;
+	return ch;
+}
+
+int alphabeticsort(const struct dirent **dirent1, const struct dirent **dirent2)
+{
+	uint8_t len1 = strlen((*dirent1)->d_name), len2 = strlen((*dirent2)->d_name);
+	for (int i = 0; i<(len1>len2?len2:len1); ++i)
 	{
-		sorted = 1;
-		for (int i = 0; i<qtyEntries-2; ++i)
+		if (toLower((*dirent1)->d_name[i])!=toLower((*dirent2)->d_name[i]))
 		{
-			if (entries[i].data.st_atime>entries[i+1].data.st_atime)
-			{
-				sorted = 0;
-				tempentry = entries[i+1];
-				entries[i+1] = entries[i];
-				entries[i] = tempentry;
-			}
+			return toLower((*dirent1)->d_name[i])<toLower((*dirent2)->d_name[i])?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
 		}
 	}
-#else 
-#ifdef LASTMODIFIED
-	while (!sorted)
+	for (int i = 0; i<(len1>len2?len2:len1); ++i)
 	{
-		sorted = 1;
-		for (int i = 0; i<qtyEntries-2; ++i)
+		if ((*dirent1)->d_name[i]!=(*dirent2)->d_name[i])
 		{
-			if (entries[i].data.st_mtime>entries[i+1].data.st_mtime)
-			{
-				sorted = 0;
-				tempentry = entries[i+1];
-				entries[i+1] = entries[i];
-				entries[i] = tempentry;
-			}
+			return (*dirent1)->d_name[i]<(*dirent2)->d_name[i]?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
 		}
 	}
-#else
-#ifdef SIZE
-	while (!sorted)
-	{
-		sorted = 1;
-		for (int i = 0; i<qtyEntries-2; ++i)
-		{
-			if (entries[i].data.st_size>entries[i+1].data.st_size)
-			{
-				sorted = 0;
-				tempentry = entries[i+1];
-				entries[i+1] = entries[i];
-				entries[i] = tempentry;
-			}
-		}
-	}
-#else 
-#ifndef ALPHABETIC
-#error "SORTINGMETHOD not set properly"
-#endif
-#endif
-#endif
-#endif
+	return len1>len2?1:-1;
+}
+
+int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
+{
+	struct stat statstruct;
+	char *fullpath = strccat(pwd, (*dirent1)->d_name);
+	stat(fullpath, &statstruct);
+	uint64_t size = statstruct.st_size;
+	free(fullpath);
+	fullpath = strccat(pwd, (*dirent2)->d_name);
+	stat(fullpath, &statstruct);
+	free(fullpath);
+	return size>statstruct.st_size?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
+}
+
+int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent2)
+{
+	struct stat statstruct;
+	char *fullpath = strccat(pwd, (*dirent1)->d_name);
+	stat(fullpath, &statstruct);
+	uint32_t accessedtime = statstruct.st_atime;
+	free(fullpath);
+	fullpath = strccat(pwd, (*dirent2)->d_name);
+	stat(fullpath, &statstruct);
+	free(fullpath);
+	return accessedtime>statstruct.st_atime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
+}
+
+int lastmodifiedsort(const struct dirent **dirent1, const struct dirent **dirent2)
+{
+	struct stat statstruct;
+	char *fullpath = strccat(pwd, (*dirent1)->d_name);
+	stat(fullpath, &statstruct);
+	uint32_t modifiedtime = statstruct.st_mtime;
+	free(fullpath);
+	fullpath = strccat(pwd, (*dirent2)->d_name);
+	stat(fullpath, &statstruct);
+	free(fullpath);
+	return modifiedtime>statstruct.st_mtime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
 int dirfilter(const struct dirent *entry)
@@ -283,11 +294,9 @@ entry_t *getFileList(int *qtyEntries)
 	entry_t *fileList;
 	int currEntry = 0, currLength, offset = 0; // offset is the number of "." and ".." currently found
 	struct dirent **entries;
-#ifndef ALPHABETIC
-	int n = scandir(pwd, &entries, &dirfilter, NULL);
-#else
-	int n = scandir(pwd, &entries, &dirfilter, alphasort);
-#endif
+	int n;
+	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
+
 	if (n==-1) return 0;
 	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
@@ -300,18 +309,9 @@ entry_t *getFileList(int *qtyEntries)
 		for (int x = 0; x<=currLength; fileList[i-offset].name[x] = entries[i]->d_name[x], ++x);
 		free(entries[i]);
 	}
-	*qtyEntries = n;
 	free(entries);
-
-#ifndef ALPHABETIC
-	sortEntries(fileList, currEntry);
-#endif
-
-#ifndef ALPHABETIC
-	n = scandir(pwd, &entries, &filefilter, NULL);
-#else
-	n = scandir(pwd, &entries, &filefilter, alphasort);
-#endif
+	*qtyEntries = n;
+	n = scandir(pwd, &entries, &filefilter, sortingfunction);
 
 	if (n==-1) return 0;
 	fileList = realloc(fileList, (*qtyEntries+n)*sizeof(entry_t));
@@ -327,14 +327,8 @@ entry_t *getFileList(int *qtyEntries)
 		for (int x = 0; x<=currLength; fileList[i-offset+*qtyEntries].name[x] = entries[i]->d_name[x], ++x);
 		free(entries[i]);
 	}
-
 	*qtyEntries += n;
 	free(entries);
-
-#ifndef ALPHABETIC
-	sortEntries(fileList, currEntry);
-#endif
-
 	return fileList;
 }
 
@@ -449,6 +443,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 		system(command);
 		free(command);
 		init();
+		setcursor(0);
 		clear();
 		drawPath();
 		int offset = *entryID>maxy/2?*entryID-maxy/2:0;
@@ -460,7 +455,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 
 void deleteFile(char *file)
 {
-	char *command = malloc(7+pwdlen+strlen(file));
+	char *command = malloc(8+pwdlen+strlen(file));
 	char initial[] = "rm -rf ";
 	for (int i = 0; initial[i]; ++i)
 	{
@@ -512,30 +507,33 @@ void editfname(entry_t *entry, int offset)
 		printName(entry->name, currFileSizeLen, offset, currIndex);
 	}
 
-	char *command = malloc(5+2*pwdlen+strlen(oldname)+strlen(entry->name)); // "mv "(3 bytes) + pwd + old filename + " " (1 byte) + pwd + new filename. As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
-	char mv[] = "mv ";
+	char *command = malloc(10+2*pwdlen+strlen(oldname)+strlen(entry->name)); // "mv "(3 bytes) + " + pwd + old filename + " + " " (1 byte) + " + pwd + new filename + ". As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
+	char mv[] = "mv \"";
 	for (int i = 0; mv[i]; ++i)
 	{
 		command[i] = mv[i];
 	}
 	for (int i = 0; pwd[i]; ++i)
 	{
-		command[3+i] = pwd[i];
+		command[4+i] = pwd[i];
 	}
 	for (int i = 0; oldname[i]; ++i)
 	{
-		command[3+pwdlen+i] = oldname[i];
+		command[4+pwdlen+i] = oldname[i];
 	}
-	command[3+pwdlen+strlen(oldname)] = ' ';
+	command[4+pwdlen+strlen(oldname)] = '"';
+	command[5+pwdlen+strlen(oldname)] = ' ';
+	command[6+pwdlen+strlen(oldname)] = '"';
 	for (int i = 0; pwd[i]; ++i)
 	{
-		command[4+pwdlen+strlen(oldname)+i] = pwd[i];
+		command[7+pwdlen+strlen(oldname)+i] = pwd[i];
 	}
 	for (int i = 0; entry->name[i]; ++i)
 	{
-		command[4+2*pwdlen+strlen(oldname)+i] = entry->name[i];
+		command[7+2*pwdlen+strlen(oldname)+i] = entry->name[i];
 	}
-	command[5+2*pwdlen+strlen(oldname)+strlen(entry->name)] = 0;
+	command[7+2*pwdlen+strlen(oldname)+strlen(entry->name)] = '"';
+	command[8+2*pwdlen+strlen(oldname)+strlen(entry->name)] = 0;
 	system(command);
 
 	setcursor(0);
@@ -595,16 +593,26 @@ void search(entry_t *entries, int *qtyEntries)
 	}
 }
 
+void setSortingFunction()
+{
+	if (sortingmethod>>1==ALPHABETICGROUP) sortingfunction = &alphabeticsort;
+	else if (sortingmethod>>1==SIZEGROUP) sortingfunction = &sizesort;
+	else if (sortingmethod>>1==MODIFIEDTIMEGROUP) sortingfunction = &lastmodifiedsort;
+	else if (sortingmethod>>1==ACCESSEDTIMEGROUP) sortingfunction = &lastaccessedsort;
+}
+
 int main()
 {
-	struct keybind_s keybinds = loadKeybinds();
+	struct option_s config = loadConfig();
+	sortingmethod = config.sortingmethod;
+	setSortingFunction();
 	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
 	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
 	initcolorpair(3, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
-	maxy-=1; // to fit the search bar
+	--maxy; // to fit the search bar
 
-	keybind_t keypressed;
+	uint8_t keypressed;
 	char *temppwd = getenv("PWD");
 	pwdlen = strlen(temppwd);
 	pwd = malloc(pwdlen+2);
@@ -630,9 +638,9 @@ int main()
 
 	while (keypressed=inesc())
 	{
-		if (keypressed==keybinds.quit)
+		if (keypressed==config.quit)
 		{	break;	}
-		else if (keypressed==keybinds.goFwd)
+		else if (keypressed==config.goFwd)
 		{	
 			if (entries) 
 			{
@@ -640,7 +648,7 @@ int main()
 				offset = currEntry>maxy/2?currEntry-maxy/2:0;
 			}	
 		}
-		else if (keypressed==keybinds.goDown)
+		else if (keypressed==config.goDown)
 		{	
 			if (currEntry<qtyEntries-1) 
 			{ 
@@ -655,7 +663,7 @@ int main()
 				highlightEntry(entries[currEntry], currEntry-offset); 
 			}	
 		}
-		else if (keypressed==keybinds.goUp)
+		else if (keypressed==config.goUp)
 		{	
 			if (currEntry>0) 
 			{ 
@@ -670,7 +678,7 @@ int main()
 				highlightEntry(entries[currEntry], currEntry-offset); 
 			}	
 		}
-		else if (keypressed==keybinds.goBack)
+		else if (keypressed==config.goBack)
 		{	
 			if (pwdlen>1) 
 			{	
@@ -686,13 +694,17 @@ int main()
 				highlightEntry(entries[currEntry], currEntry-offset); 
 			}	
 		}
-		else if (keypressed==keybinds.deletefile)
+		else if (keypressed==config.deletefile)
 		{	
 			deleteFile(entries[currEntry].name); 
 			deHighlightEntry(entries[currEntry], currEntry-offset); 
-			pushback(entries, currEntry, qtyEntries); 
 			--qtyEntries; 
+			clear();
+			drawPath();
+			freeFileList(entries, qtyEntries);
+			entries = getFileList(&qtyEntries);
 			drawObjects(entries, offset, qtyEntries); 
+			move(qtyEntries+1, 0);
 			if (currEntry==qtyEntries-1) 
 			{ 
 				--currEntry; 
@@ -701,8 +713,8 @@ int main()
 			drawEntryCount(offset, currEntry, qtyEntries);
 			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset); 
 		}
-		else if (keypressed==keybinds.editfile)
-		{	
+		else if (keypressed==config.editfile)
+		{
 			editfname(&entries[currEntry], currEntry-offset); 
 			freeFileList(entries, qtyEntries);
 			entries = getFileList(&qtyEntries);
@@ -710,8 +722,8 @@ int main()
 			drawEntryCount(offset, currEntry, qtyEntries);
 			highlightEntry(entries[currEntry], currEntry-offset);
 		}
-		else if (keypressed==keybinds.savedir) savePWD();
-		else if (keypressed==keybinds.loaddir)
+		else if (keypressed==config.savedir) savePWD();
+		else if (keypressed==config.loaddir)
 		{	
 			loadsavedPWD(); 
 			if (entries) freeFileList(entries, qtyEntries); 
@@ -723,24 +735,29 @@ int main()
 		}
 		else if (keypressed==15)
 		{	
-			keybinds = drawSettings(); 
+			config = drawSettings(); 
+			sortingmethod = config.sortingmethod;
+			setSortingFunction();
+			freeFileList(entries, qtyEntries);
+			entries = getFileList(&qtyEntries);
+			currEntry = offset = 0; 
 			clear();
 			drawPath(); 
 			drawEntryCount(offset, currEntry, qtyEntries);
 			drawObjects(entries, offset, qtyEntries); 
 			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);	
 		}
-		else if (keypressed==keybinds.copy)
+		else if (keypressed==config.copy)
 		{
 			keepoldFile = 1;
 			savecpPWD(entries[currEntry].name);
 		}
-		else if (keypressed==keybinds.cut)
+		else if (keypressed==config.cut)
 		{
 			keepoldFile = 0;
 			savecpPWD(entries[currEntry].name);
 		}
-		else if (keypressed==keybinds.paste)
+		else if (keypressed==config.paste)
 		{
 			if (keepoldFile!=-1)
 			{
@@ -753,7 +770,7 @@ int main()
 			}
 			if (keepoldFile==0) keepoldFile = -1;
 		}
-		else if (keypressed==keybinds.search)
+		else if (keypressed==config.search)
 		{
 			currEntry = 0;
 			offset = 0;
@@ -766,7 +783,7 @@ int main()
 			drawEntryCount(offset, currEntry, qtyEntries);
 			if (entries) highlightEntry(entries[currEntry], currEntry-offset);
 		}
-		else if (keypressed==keybinds.cancelsearch)
+		else if (keypressed==config.cancelsearch)
 		{
 			currEntry = 0;
 			offset = 0;
@@ -788,6 +805,7 @@ int main()
 	free(pwd);
 	free(backpwd);
 	free(filter);
+	free(filecppwd);
 	freeConfig();
 	setcursor(1);
 	deinit();

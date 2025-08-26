@@ -1,29 +1,30 @@
 #ifndef SETTINGS_H_
 #define SETTINGS_H_
 
-#define keybind_t unsigned char
+#define option_t unsigned char
 
-struct keybind_s
+struct option_s
 {
-	keybind_t goUp;
-	keybind_t goDown;
-	keybind_t goFwd;
-	keybind_t editfile;
-	keybind_t deletefile;
-	keybind_t goBack;
-	keybind_t savedir;
-	keybind_t loaddir;
-	keybind_t quit;
-	keybind_t copy;
-	keybind_t cut;
-	keybind_t paste;
-	keybind_t search;
-	keybind_t cancelsearch;
+	option_t goUp;
+	option_t goDown;
+	option_t goFwd;
+	option_t editfile;
+	option_t deletefile;
+	option_t goBack;
+	option_t savedir;
+	option_t loaddir;
+	option_t quit;
+	option_t copy;
+	option_t cut;
+	option_t paste;
+	option_t search;
+	option_t cancelsearch;
+	option_t sortingmethod;
 };
 
-struct keybind_s loadKeybinds();
-void saveKeybinds();
+struct option_s loadConfig();
+void saveConfig();
 void freeConfig();
-struct keybind_s drawSettings();
+struct option_s drawSettings();
 
 #endif
