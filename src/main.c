@@ -696,11 +696,12 @@ int main()
 			if (currEntry<qtyEntries-1) 
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
-				offset += maxy-2;
-				currEntry += maxy-2;
+				offset += maxy-1;
+				currEntry += maxy-1;
 				if (currEntry>qtyEntries-1)
 				{
-					offset = qtyEntries+maxy+2>0?qtyEntries-maxy+2:0;
+					if (offset>qtyEntries-maxy+1) offset -= maxy-1;
+					else offset = qtyEntries-maxy+1>0?qtyEntries-maxy+1:0;
 					currEntry = qtyEntries-1;
 				}
 				clear();
@@ -715,8 +716,8 @@ int main()
 			if (currEntry>0) 
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
-				offset -= maxy-2; 
-				currEntry -= maxy-2;
+				offset -= maxy-1; 
+				currEntry -= maxy-1;
 				if (offset<0)
 				{
 					offset = 0;

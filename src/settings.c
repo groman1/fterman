@@ -93,7 +93,7 @@ struct config_s loadConfig()
 	struct config_s configstruct;
 	configFile = fopen("/etc/fterman/fterman.conf", "r");
 	if (!configFile)
-	{	deinit(); setcursor(1); printf("No config file detected, you probably didn't run make install. Read README.md\n"); exit(1);	}
+	{	deinit(); setcursor(1); printf("No config file detected, you probably didn't run make install\n"); exit(1);	}
 	char *confstring = malloc(1), buff;
 	int i;
 	for (i = 0; (buff=getc(configFile))!=EOF; ++i)
@@ -105,11 +105,18 @@ struct config_s loadConfig()
 	confstring[i] = 0;
 
 	config = parseXML(confstring);
+	if (config==(void*)0x10)
+	{
+		deinit();
+		setcursor(1);
+		printf("The config file is empty, run make install-config\n");
+		exit(1);
+	}
 	if (config->tagQty!=17)
 	{
 		deinit();
 		setcursor(1);
-		printf("Invalid config detected, run make install-config");
+		printf("Invalid config detected, run make install-config\n");
 		exit(1);
 	}
 	configstruct.goUp = strTooption_t(config->dataArr[0].value.str);
@@ -157,7 +164,7 @@ struct config_s drawSettings()
 	char *settings[] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method" };
 	char *sortingmethods[] = { "Alphabetic (A-Z)", "Alphabetic (Z-A)", "Size (low to high)", "Size (high to low)", "Last accessed (old to new)", "Last accessed (new to old)", "Last modified (old to new)", "Last modified (new to old)" };
 	for (int i = 0; i<17; ++i) moveprint(1+i, 0, settings[i]);
-	moveprint(18, 0, sortingmethods[config->dataArr[14].value.str[0]-48]);
+	moveprint(18, 0, sortingmethods[config->dataArr[16].value.str[0]-48]);
 
 	highlightSetting(0, settings[0]);
 	option_t ch;
@@ -189,7 +196,7 @@ struct config_s drawSettings()
 			}
 			case 191:
 			{
-				if (currLine==15)
+				if (currLine==17)
 				{
 					if (config->dataArr[16].value.str[0]==48) config->dataArr[16].value.str[0] = 56;
 					--config->dataArr[16].value.str[0];

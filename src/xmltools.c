@@ -1,7 +1,8 @@
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
-#define bool unsigned char
+#define bool uint8_t
 
 typedef struct {
     char *attr;
@@ -18,13 +19,13 @@ struct xmlValueStruct {
 		xml *xmlVal;
 	} value;
     xmlArgs *args;
-    int argsQty;
+    uint16_t argsQty;
 	bool isNesting;
 };
 
 struct xmlStruct {
 	xml *parent;
-	int tagQty;
+	int32_t tagQty;
 	xmlValue *dataArr;
 };
 
@@ -107,7 +108,7 @@ char *xmlToString(xml *ptrold)
 		}
 		else
 		{
-			if (currPtr->dataArr[currTag].value.xmlVal->parent!=currPtr) // func fillDefault has not been called
+			if (!currPtr->dataArr[currTag].isNesting) // func fillDefault has not been called
 			{
 				--tabQty;
 				for (int x = 0; currPtr->dataArr[currTag].value.str[x]; ++x)
