@@ -9,6 +9,8 @@ struct config_s
 {
 	option_t goUp;
 	option_t goDown;
+	option_t goUpLong;
+	option_t goDownLong;
 	option_t goFwd;
 	option_t editfile;
 	option_t deletefile;
@@ -103,7 +105,7 @@ struct config_s loadConfig()
 	confstring[i] = 0;
 
 	config = parseXML(confstring);
-	if (config->tagQty!=15)
+	if (config->tagQty!=17)
 	{
 		deinit();
 		setcursor(1);
@@ -112,19 +114,21 @@ struct config_s loadConfig()
 	}
 	configstruct.goUp = strTooption_t(config->dataArr[0].value.str);
 	configstruct.goDown = strTooption_t(config->dataArr[1].value.str);
-	configstruct.goFwd = strTooption_t(config->dataArr[2].value.str);
-	configstruct.editfile = strTooption_t(config->dataArr[3].value.str);
-	configstruct.deletefile = strTooption_t(config->dataArr[4].value.str);
-	configstruct.goBack = strTooption_t(config->dataArr[5].value.str);
-	configstruct.savedir = strTooption_t(config->dataArr[6].value.str);
-	configstruct.loaddir = strTooption_t(config->dataArr[7].value.str);
-	configstruct.quit = strTooption_t(config->dataArr[8].value.str);
-	configstruct.copy = strTooption_t(config->dataArr[9].value.str);
-	configstruct.cut = strTooption_t(config->dataArr[10].value.str);
-	configstruct.paste = strTooption_t(config->dataArr[11].value.str);
-	configstruct.search = strTooption_t(config->dataArr[12].value.str);
-	configstruct.cancelsearch = strTooption_t(config->dataArr[13].value.str);
-	configstruct.sortingmethod = config->dataArr[14].value.str[0]-48;
+	configstruct.goUpLong = strTooption_t(config->dataArr[2].value.str);
+	configstruct.goDownLong = strTooption_t(config->dataArr[3].value.str);
+	configstruct.goFwd = strTooption_t(config->dataArr[4].value.str);
+	configstruct.editfile = strTooption_t(config->dataArr[5].value.str);
+	configstruct.deletefile = strTooption_t(config->dataArr[6].value.str);
+	configstruct.goBack = strTooption_t(config->dataArr[7].value.str);
+	configstruct.savedir = strTooption_t(config->dataArr[8].value.str);
+	configstruct.loaddir = strTooption_t(config->dataArr[9].value.str);
+	configstruct.quit = strTooption_t(config->dataArr[10].value.str);
+	configstruct.copy = strTooption_t(config->dataArr[11].value.str);
+	configstruct.cut = strTooption_t(config->dataArr[12].value.str);
+	configstruct.paste = strTooption_t(config->dataArr[13].value.str);
+	configstruct.search = strTooption_t(config->dataArr[14].value.str);
+	configstruct.cancelsearch = strTooption_t(config->dataArr[15].value.str);
+	configstruct.sortingmethod = config->dataArr[16].value.str[0]-48;
 	free(confstring);
 	fclose(configFile);
 	return configstruct;
@@ -149,11 +153,11 @@ struct config_s drawSettings()
 {
 	int currLine = 0;
 	clear();
-	moveprint(0,0, "Keybinds (press q to exit)\n");
-	char *settings[] = { "Move up an entry", "Move down an entry", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method" };
+	moveprint(0,0, "Keybinds			(press q to exit)\n");
+	char *settings[] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method" };
 	char *sortingmethods[] = { "Alphabetic (A-Z)", "Alphabetic (Z-A)", "Size (low to high)", "Size (high to low)", "Last accessed (old to new)", "Last accessed (new to old)", "Last modified (old to new)", "Last modified (new to old)" };
-	for (int i = 0; i<15; ++i) moveprint(1+i, 0, settings[i]);
-	moveprint(16, 0, sortingmethods[config->dataArr[14].value.str[0]-48]);
+	for (int i = 0; i<17; ++i) moveprint(1+i, 0, settings[i]);
+	moveprint(18, 0, sortingmethods[config->dataArr[14].value.str[0]-48]);
 
 	highlightSetting(0, settings[0]);
 	option_t ch;
@@ -162,7 +166,7 @@ struct config_s drawSettings()
 		switch (ch)
 		{
 			case 13: 
-			{	if (currLine!=15) 
+			{	if (currLine!=17)
 				{ 
 					bindSetting(currLine, settings[currLine]);	
 					ch = inesc(); 
@@ -174,12 +178,12 @@ struct config_s drawSettings()
 			}
 			case 190:
 			{
-				if (currLine==15)
+				if (currLine==17)
 				{
-					if (config->dataArr[14].value.str[0]==55) config->dataArr[14].value.str[0] = 47;
-					++config->dataArr[14].value.str[0];
-					clearSettingLine(15);
-					highlightSetting(15, sortingmethods[config->dataArr[14].value.str[0]-48]);
+					if (config->dataArr[16].value.str[0]==55) config->dataArr[16].value.str[0] = 47;
+					++config->dataArr[16].value.str[0];
+					clearSettingLine(17);
+					highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
 				}
 				break;
 			}
@@ -187,22 +191,22 @@ struct config_s drawSettings()
 			{
 				if (currLine==15)
 				{
-					if (config->dataArr[14].value.str[0]==48) config->dataArr[14].value.str[0] = 56;
-					--config->dataArr[14].value.str[0];
-					clearSettingLine(15);
-					highlightSetting(15, sortingmethods[config->dataArr[14].value.str[0]-48]);
+					if (config->dataArr[16].value.str[0]==48) config->dataArr[16].value.str[0] = 56;
+					--config->dataArr[16].value.str[0];
+					clearSettingLine(17);
+					highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
 				}
 				break;
 			}
 			case 189:
 			{	
-				if (currLine<15) 
-				{ 
+				if (currLine<17) 
+				{
 					dehighlightSetting(currLine, settings[currLine]); 
-					if (currLine==13)
+					if (currLine==15)
 					{
-						++currLine; 
-						highlightSetting(++currLine, sortingmethods[config->dataArr[14].value.str[0]-48]); 
+						++currLine;
+						highlightSetting(++currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
 					}
 					else
 					{
@@ -215,9 +219,9 @@ struct config_s drawSettings()
 			{	
 				if (currLine>0) 
 				{ 
-					if (currLine==15) 
+					if (currLine==17)
 					{
-						dehighlightSetting(currLine, sortingmethods[config->dataArr[14].value.str[0]-48]); 
+						dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
 						--currLine; 
 					}
 					else

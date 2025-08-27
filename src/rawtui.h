@@ -32,6 +32,7 @@ uint8_t in();
 uint8_t inesc();
 void clear();
 void cleartobot();
+void cleartoeol();
 void saveCursorPos();
 void loadCursorPos();
 void wrattr(attr_t attr);

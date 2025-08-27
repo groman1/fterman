@@ -7,6 +7,8 @@ struct option_s
 {
 	option_t goUp;
 	option_t goDown;
+	option_t goUpLong;
+	option_t goDownLong;
 	option_t goFwd;
 	option_t editfile;
 	option_t deletefile;

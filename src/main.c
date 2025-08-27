@@ -17,6 +17,12 @@
 #define ACCESSEDTIMEGROUP 2
 #define MODIFIEDTIMEGROUP 3
 
+#define redrawentries if (entries) freeFileList(entries, qtyEntries);\
+				entries = getFileList(&qtyEntries);\
+				drawObjects(entries, offset, qtyEntries);\
+				drawEntryCount(offset, currEntry, qtyEntries);\
+				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);
+
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
 uint16_t maxx, maxy, pwdlen;
 int8_t keepoldFile, sortingmethod;
@@ -38,15 +44,6 @@ unsigned char getIntLen(long long input)
 		multiplier *= 10;
 	}
 	return currFileSizeLen;
-}
-
-void pushback(entry_t *entries, int startingIndex, int qtyEntries)
-{
-	free(entries[startingIndex].name);
-	for (; startingIndex<qtyEntries-1; ++startingIndex)
-	{
-		entries[startingIndex] = entries[startingIndex+1];
-	}
 }
 
 void strPushback(char *string, int startingIndex)
@@ -118,24 +115,28 @@ void printFileSize(long long size, int offset)
 void deHighlightEntry(entry_t entry, int offset)
 {
 	move(offset+1, 0);
-	if (S_ISDIR(entry.data.st_mode)) wrattr(NORMAL|COLORPAIR(DIRECTORYCOLOR));
-	else if (S_ISLNK(entry.data.st_mode)) wrattr(NORMAL|COLORPAIR(SYMLINKCOLOR));
-	else wrattr(NORMAL|COLORPAIR(REGFILECOLOR));
+	uint8_t colorpair;
+	if (S_ISDIR(entry.data.st_mode)) colorpair = DIRECTORYCOLOR;
+	else if (S_ISLNK(entry.data.st_mode)) colorpair = SYMLINKCOLOR;
+	else colorpair = REGFILECOLOR;
 	clearline();
+	wrattr(NORMAL|COLORPAIR(colorpair));
 	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
-	printFileSize(entry.data.st_size, offset);
+	if (colorpair==REGFILECOLOR) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
 
 void highlightEntry(entry_t entry, int offset)
 {
 	move(offset+1, 0);
-	if (S_ISDIR(entry.data.st_mode)) wrattr(REVERSE|COLORPAIR(DIRECTORYCOLOR));
-	else if (S_ISLNK(entry.data.st_mode)) wrattr(REVERSE|COLORPAIR(SYMLINKCOLOR));
-	else wrattr(REVERSE|COLORPAIR(REGFILECOLOR));
+	uint8_t colorpair;
+	if (S_ISDIR(entry.data.st_mode)) colorpair = DIRECTORYCOLOR;
+	else if (S_ISLNK(entry.data.st_mode)) colorpair = SYMLINKCOLOR;
+	else colorpair = REGFILECOLOR;
 	clearline();
+	wrattr(REVERSE|COLORPAIR(colorpair));
 	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
-	printFileSize(entry.data.st_size, offset);
+	if (colorpair==REGFILECOLOR) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
 
@@ -181,8 +182,9 @@ void drawEntryCount(int offset, int currentry, int qtyEntries)
 {
 	--qtyEntries;
 	move(0, maxx-34);
+	cleartoeol();
 	char entrycntstring[46];
-	sprintf(entrycntstring, "%d-(%d)-%d/%d", offset, currentry, offset+maxy-1>qtyEntries?qtyEntries:offset+maxy-1, qtyEntries);
+	sprintf(entrycntstring, "%d-(%d)-%d/%d", offset, currentry, offset+maxy-3>qtyEntries?qtyEntries:offset+maxy-3, qtyEntries);
 	moveprint(0, maxx-strlen(entrycntstring), entrycntstring);
 }
 
@@ -227,11 +229,11 @@ int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
 	char *fullpath = strccat(pwd, (*dirent1)->d_name);
-	stat(fullpath, &statstruct);
+	lstat(fullpath, &statstruct);
 	uint64_t size = statstruct.st_size;
 	free(fullpath);
 	fullpath = strccat(pwd, (*dirent2)->d_name);
-	stat(fullpath, &statstruct);
+	lstat(fullpath, &statstruct);
 	free(fullpath);
 	return size>statstruct.st_size?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
@@ -240,11 +242,11 @@ int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent
 {
 	struct stat statstruct;
 	char *fullpath = strccat(pwd, (*dirent1)->d_name);
-	stat(fullpath, &statstruct);
+	lstat(fullpath, &statstruct);
 	uint32_t accessedtime = statstruct.st_atime;
 	free(fullpath);
 	fullpath = strccat(pwd, (*dirent2)->d_name);
-	stat(fullpath, &statstruct);
+	lstat(fullpath, &statstruct);
 	free(fullpath);
 	return accessedtime>statstruct.st_atime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
@@ -253,11 +255,11 @@ int lastmodifiedsort(const struct dirent **dirent1, const struct dirent **dirent
 {
 	struct stat statstruct;
 	char *fullpath = strccat(pwd, (*dirent1)->d_name);
-	stat(fullpath, &statstruct);
+	lstat(fullpath, &statstruct);
 	uint32_t modifiedtime = statstruct.st_mtime;
 	free(fullpath);
 	fullpath = strccat(pwd, (*dirent2)->d_name);
-	stat(fullpath, &statstruct);
+	lstat(fullpath, &statstruct);
 	free(fullpath);
 	return modifiedtime>statstruct.st_mtime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
@@ -270,7 +272,7 @@ int dirfilter(const struct dirent *entry)
 	char *fullpath;
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
-	stat(fullpath, &entrydata);
+	lstat(fullpath, &entrydata);
 	free(fullpath);
 	if (S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
@@ -282,7 +284,7 @@ int filefilter(const struct dirent *entry)
 	char *fullpath;
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
-	stat(fullpath, &entrydata);
+	lstat(fullpath, &entrydata);
 	free(fullpath);
 	if (!S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
@@ -302,7 +304,7 @@ entry_t *getFileList(int *qtyEntries)
 	for (int i = 0; i<n; ++i)
 	{
 		fileName = strccat(pwd, entries[i]->d_name);
-		stat(fileName, &fileList[i-offset].data);
+		lstat(fileName, &fileList[i-offset].data);
 		free(fileName);
 		currLength = strlen(entries[i]->d_name);
 		fileList[i-offset].name = malloc(currLength+1);
@@ -320,7 +322,7 @@ entry_t *getFileList(int *qtyEntries)
 	for (int i = 0; i<n; ++i)
 	{
 		fileName = strccat(pwd, entries[i]->d_name);
-		stat(fileName, &fileList[i-offset+*qtyEntries].data);
+		lstat(fileName, &fileList[i-offset+*qtyEntries].data);
 		free(fileName);
 		currLength = strlen(entries[i]->d_name);
 		fileList[i-offset+*qtyEntries].name = malloc(currLength+1);
@@ -354,7 +356,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		clearline();
 		wrattr(COLORPAIR(currPair));
 		printName(entries[i].name, strlen(entries[i].name), i-offset, 0);
-		printFileSize(entries[i].data.st_size, i-offset);
+		if (currPair==REGFILECOLOR) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
 	wrattr(NORMAL);
@@ -383,12 +385,24 @@ char *goback(char *backpath)
 	return backpath;
 }
 
-entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
+entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int offset)
 {
 	filter = realloc(filter, 1);
 	filter[0] = 0;
+	struct stat tempstat;
+	if (S_ISLNK(entries[*entryID].data.st_mode))
+	{
+		char *fullpwd;
+		fullpwd = strccat(pwd, entries[*entryID].name);
+		stat(fullpwd, &tempstat);
+		free(fullpwd);
+	}
+	else
+	{
+		tempstat = entries[*entryID].data;
+	}
 	if (!*qtyEntries) return entries;
-	if (S_ISDIR(entries[*entryID].data.st_mode))
+	if (S_ISDIR(tempstat.st_mode))
 	{
 		pwd = realloc(pwd, pwdlen+strlen(entries[*entryID].name)+2);
 		for (int i = 0; entries[*entryID].name[i]; ++i)
@@ -404,6 +418,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 			clear();
 			drawPath();
 			drawObjects(entries, 0, *qtyEntries);
+			drawEntryCount(0, 0, *qtyEntries);
 			if (*qtyEntries) highlightEntry(entries[0], 0);
 		}
 		else
@@ -413,7 +428,6 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 			accessdenied();
 		}
 		*entryID = 0;
-		return entries;
 	}
 	else
 	{
@@ -446,11 +460,11 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries)
 		setcursor(0);
 		clear();
 		drawPath();
-		int offset = *entryID>maxy/2?*entryID-maxy/2:0;
+		drawEntryCount(offset, *entryID, *qtyEntries);
 		drawObjects(entries, offset, *qtyEntries);
 		highlightEntry(entries[*entryID], *entryID-offset);
-		return entries;
 	}
+	return entries;
 }
 
 void deleteFile(char *file)
@@ -634,7 +648,7 @@ int main()
 	drawPath();
 	drawEntryCount(0, 0, qtyEntries);
 	drawObjects(entries, 0, qtyEntries);
-	highlightEntry(entries[0], 0);
+	if (qtyEntries) highlightEntry(entries[0], 0);
 
 	while (keypressed=inesc())
 	{
@@ -644,8 +658,7 @@ int main()
 		{	
 			if (entries) 
 			{
-				entries = enterObject(entries, &currEntry, &qtyEntries);
-				offset = currEntry>maxy/2?currEntry-maxy/2:0;
+				entries = enterObject(entries, &currEntry, &qtyEntries, offset);
 			}	
 		}
 		else if (keypressed==config.goDown)
@@ -656,8 +669,8 @@ int main()
 				++currEntry; 
 				if (currEntry-offset>maxy-4&&currEntry<qtyEntries-1)
 				{
-					++offset; 
-					drawObjects(entries, offset, qtyEntries); 
+					++offset;
+					drawObjects(entries, offset, qtyEntries);
 				}
 				drawEntryCount(offset, currEntry, qtyEntries);
 				highlightEntry(entries[currEntry], currEntry-offset); 
@@ -678,20 +691,59 @@ int main()
 				highlightEntry(entries[currEntry], currEntry-offset); 
 			}	
 		}
+		else if (keypressed==config.goDownLong)
+		{
+			if (currEntry<qtyEntries-1) 
+			{ 
+				deHighlightEntry(entries[currEntry], currEntry-offset); 
+				offset += maxy-2;
+				currEntry += maxy-2;
+				if (currEntry>qtyEntries-1)
+				{
+					offset = qtyEntries+maxy+2>0?qtyEntries-maxy+2:0;
+					currEntry = qtyEntries-1;
+				}
+				clear();
+				drawPath();
+				drawObjects(entries, offset, qtyEntries); 
+				drawEntryCount(offset, currEntry, qtyEntries);
+				highlightEntry(entries[currEntry], currEntry-offset); 
+			}
+		}
+		else if (keypressed==config.goUpLong)
+		{
+			if (currEntry>0) 
+			{ 
+				deHighlightEntry(entries[currEntry], currEntry-offset); 
+				offset -= maxy-2; 
+				currEntry -= maxy-2;
+				if (offset<0)
+				{
+					offset = 0;
+					currEntry = 0;
+				}
+				clear();
+				drawPath();
+				drawObjects(entries, offset, qtyEntries); 
+				drawEntryCount(offset, currEntry, qtyEntries);
+				highlightEntry(entries[currEntry], currEntry-offset); 
+			}
+		}
 		else if (keypressed==config.goBack)
 		{	
 			if (pwdlen>1) 
 			{	
 				backpwd = goback(backpwd);
-				if (entries) freeFileList(entries, qtyEntries); 
 				clear();
 				drawPath();
-				entries = getFileList(&qtyEntries); 
-				currEntry = findentry(backpwd, entries, qtyEntries); 
-				offset = currEntry>maxy/2?currEntry-maxy/2:0;  
 				drawEntryCount(offset, currEntry, qtyEntries);
+				if (entries) freeFileList(entries, qtyEntries);
+				entries = getFileList(&qtyEntries);
+				currEntry = findentry(backpwd, entries, qtyEntries); 
+				offset = currEntry; // TEMPORARY
 				drawObjects(entries, offset, qtyEntries);
-				highlightEntry(entries[currEntry], currEntry-offset); 
+				drawEntryCount(offset, currEntry, qtyEntries);
+				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);
 			}	
 		}
 		else if (keypressed==config.deletefile)
@@ -701,51 +753,34 @@ int main()
 			--qtyEntries; 
 			clear();
 			drawPath();
-			freeFileList(entries, qtyEntries);
-			entries = getFileList(&qtyEntries);
-			drawObjects(entries, offset, qtyEntries); 
-			move(qtyEntries+1, 0);
-			if (currEntry==qtyEntries-1) 
+			if (currEntry==qtyEntries) 
 			{ 
 				--currEntry; 
 				if (offset) --offset; 
 			} 
-			drawEntryCount(offset, currEntry, qtyEntries);
-			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset); 
+			redrawentries;
 		}
 		else if (keypressed==config.editfile)
 		{
 			editfname(&entries[currEntry], currEntry-offset); 
-			freeFileList(entries, qtyEntries);
-			entries = getFileList(&qtyEntries);
-			drawObjects(entries, offset, qtyEntries); 
-			drawEntryCount(offset, currEntry, qtyEntries);
-			highlightEntry(entries[currEntry], currEntry-offset);
+			redrawentries;
 		}
 		else if (keypressed==config.savedir) savePWD();
 		else if (keypressed==config.loaddir)
 		{	
 			loadsavedPWD(); 
-			if (entries) freeFileList(entries, qtyEntries); 
-			entries = getFileList(&qtyEntries); 
 			currEntry = offset = 0; 
-			drawEntryCount(offset, currEntry, qtyEntries);
-			drawObjects(entries, offset, qtyEntries); 
-			if (qtyEntries) highlightEntry(entries[0], currEntry-offset); 
+			redrawentries;
 		}
 		else if (keypressed==15)
 		{	
 			config = drawSettings(); 
 			sortingmethod = config.sortingmethod;
 			setSortingFunction();
-			freeFileList(entries, qtyEntries);
-			entries = getFileList(&qtyEntries);
 			currEntry = offset = 0; 
 			clear();
-			drawPath(); 
-			drawEntryCount(offset, currEntry, qtyEntries);
-			drawObjects(entries, offset, qtyEntries); 
-			if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);	
+			drawPath();
+			redrawentries;
 		}
 		else if (keypressed==config.copy)
 		{
@@ -762,11 +797,7 @@ int main()
 			if (keepoldFile!=-1)
 			{
 				copycutFile(keepoldFile);
-				freeFileList(entries, qtyEntries);
-				entries = getFileList(&qtyEntries);
-				drawObjects(entries, offset, qtyEntries);
-				drawEntryCount(offset, currEntry, qtyEntries);
-				highlightEntry(entries[currEntry], currEntry-offset);
+				redrawentries;
 			}
 			if (keepoldFile==0) keepoldFile = -1;
 		}
@@ -777,11 +808,7 @@ int main()
 			search(entries, &qtyEntries);
 			clear();
 			drawPath();
-			freeFileList(entries, qtyEntries);
-			entries = getFileList(&qtyEntries);
-			drawObjects(entries, offset, qtyEntries); 
-			drawEntryCount(offset, currEntry, qtyEntries);
-			if (entries) highlightEntry(entries[currEntry], currEntry-offset);
+			redrawentries;
 		}
 		else if (keypressed==config.cancelsearch)
 		{
@@ -791,11 +818,7 @@ int main()
 			filter[0] = 0;
 			clear();
 			drawPath();
-			freeFileList(entries, qtyEntries);
-			entries = getFileList(&qtyEntries);
-			drawEntryCount(offset, currEntry, qtyEntries);
-			drawObjects(entries, offset, qtyEntries); 
-			highlightEntry(entries[currEntry], currEntry-offset);
+			redrawentries;
 		}
 		getTermXY(&maxy, &maxx);
 	}

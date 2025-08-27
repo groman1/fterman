@@ -3,6 +3,7 @@ How to install:
 - Use make && sudo make install
 # Default keybinds
 Up/Down arrows: move between entries\
+PgUp/Down: move a page\
 Left arrow: go back a directory\
 Right arrow: open a file/directory\
 Delete: delete currently selected file/directory\

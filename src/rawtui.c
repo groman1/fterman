@@ -178,7 +178,12 @@ void clear()
 
 void cleartobot()
 {
-	write(STDOUT_FILENO, "\x1bJ", 3);
+	write(STDOUT_FILENO, "\x1b[J", 3);
+}
+
+void cleartoeol()
+{
+	write(STDOUT_FILENO, "\x1b[K", 3);
 }
 
 void getTermXY(uint16_t *y, uint16_t *x)
