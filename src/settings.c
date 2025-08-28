@@ -5,6 +5,7 @@
 
 #define option_t unsigned char
 
+// Struct that stores all the keybinds and options necessary
 struct config_s
 {
 	option_t goUp;
@@ -29,6 +30,7 @@ struct config_s
 xml *config;
 FILE *configFile;
 
+// Returns the minimum required string length to store a *num* in it
 unsigned char getShortLen(unsigned short num)
 {
 	unsigned short multiplier = 10, len = 1;
@@ -40,6 +42,7 @@ unsigned char getShortLen(unsigned short num)
 	return len;
 }
 
+// Converts *keybind* to string and puts it in *dest*
 void option_tToStr(option_t keybind, char *dest)
 {
 	unsigned short multiplier = 1, len = getShortLen(keybind)-1;
@@ -52,6 +55,7 @@ void option_tToStr(option_t keybind, char *dest)
 	
 }
 
+// Converts *string* to option_t and return it as return value
 option_t strTooption_t(char *string)
 {
 	option_t keybind = 0;
@@ -63,6 +67,7 @@ option_t strTooption_t(char *string)
 	return keybind;
 }
 
+// Rewrites the current string *setting* with color pair 3 enabled at line *offset*
 void bindSetting(int offset, char *setting)
 {
 	wrattr(COLORPAIR(3));
@@ -70,6 +75,7 @@ void bindSetting(int offset, char *setting)
 	wrattr(NORMAL);
 }
 
+// Rewrites the current string *setting* with REVERSE attribute enabled at line *offset*
 void highlightSetting(int offset, char *setting)
 {
 	wrattr(REVERSE);
@@ -77,17 +83,20 @@ void highlightSetting(int offset, char *setting)
 	wrattr(NORMAL);
 }
 
+// clears the specified by *line* line
 void clearSettingLine(int line)
 {
 	move(1+line, 0);
 	clearline();
 }
 
+// Rewrites the current string *setting* with NORMAL attribute enabled at line *offset*
 void dehighlightSetting(int offset, char *setting)
 {
 	moveprint(1+offset, 0, setting);
 }
 
+// Loads config from *configFile* and returns it as return value
 struct config_s loadConfig()
 {
 	struct config_s configstruct;
@@ -141,6 +150,7 @@ struct config_s loadConfig()
 	return configstruct;
 }
 
+// Writes config *config* at *configFile*
 void saveConfig()
 {
 	configFile = fopen("/etc/fterman/fterman.conf", "w+");
@@ -151,11 +161,13 @@ void saveConfig()
 	freeXML(config);
 }
 
+// Frees config structure
 void freeConfig()
 {
 	freeXML(config);
 }
 
+// Draws the main settings menu, returns the updated config
 struct config_s drawSettings()
 {
 	int currLine = 0;

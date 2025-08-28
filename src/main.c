@@ -34,6 +34,7 @@ typedef struct
 	struct stat data;
 } entry_t;
 
+// Returns the amount of characters required to store *input* in a string
 unsigned char getIntLen(long long input)
 {
 	unsigned char currFileSizeLen = 1;
@@ -46,6 +47,7 @@ unsigned char getIntLen(long long input)
 	return currFileSizeLen;
 }
 
+// Pushes back *string* starting at *startingIndex* by one byte, clearing letter at *startingIndex*
 void strPushback(char *string, int startingIndex)
 {
 	for (; string[startingIndex+1]; ++startingIndex)
@@ -55,6 +57,7 @@ void strPushback(char *string, int startingIndex)
 	string[startingIndex] = 0;
 }
 
+// Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
 void strPushfwd(char *string, int startingIndex, int stringLen) // assume string is reallocated properly
 {
 	for (int i = stringLen; i>startingIndex; --i)
@@ -64,24 +67,24 @@ void strPushfwd(char *string, int startingIndex, int stringLen) // assume string
 	string[stringLen+1] = 0;
 }
 
+// Functions like strcat, but the result is stored in a malloc'd return value, not *string1*
 char *strccat(char *string1, const char *string2)
 {
-	char *result = malloc(1);
+	char *result = malloc(strlen(string1)+strlen(string2)+1);
 	int x, i;
 	for (x = 0; string1[x]; ++x)
 	{
 		result[x] = string1[x];
-		result = realloc(result, x+2);
 	}
 	for (i = 0; string2[i]; ++i)
 	{
 		result[i+x] = string2[i];
-		result = realloc(result, i+x+2);
 	}
 	result[i+x] = 0;
 	return result;
 }
 
+// Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
 void printName(char *name, int fileSizeLen, int offset, int currIndex)
 {
 	move(1+offset, 0);
@@ -106,12 +109,14 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex)
 	}
 }
 
+// Prints file size *size* at offset *offset*
 void printFileSize(long long size, int offset)
 {
 	move(1+offset, maxx-getIntLen(size));
 	dprintf(STDOUT_FILENO, "%lld", size);
 }
 
+// Reverts the effects of highlightEntry() (applies NORMAL attribute)
 void deHighlightEntry(entry_t entry, int offset)
 {
 	move(offset+1, 0);
@@ -126,6 +131,7 @@ void deHighlightEntry(entry_t entry, int offset)
 	wrattr(NORMAL);
 }
 
+// Highlights the entry with text *entry->name* at offset *offset* (applies REVERSE attribute)
 void highlightEntry(entry_t entry, int offset)
 {
 	move(offset+1, 0);
@@ -140,6 +146,7 @@ void highlightEntry(entry_t entry, int offset)
 	wrattr(NORMAL);
 }
 
+// Saves the current path to *savedpwd*
 void savePWD()
 {
 	free(savedpwd);
@@ -147,6 +154,7 @@ void savePWD()
 	strcpy(savedpwd, pwd);
 }
 
+// Saves the path of an entry to copy/cut to *filecppwd*
 void savecpPWD(char *entry)
 {
 	filecppwd = realloc(filecppwd, pwdlen+strlen(entry)+2);
@@ -155,14 +163,15 @@ void savecpPWD(char *entry)
 	strcat(filecppwd, entry);
 }
 
+// Loads the previously saved path by savePWD() at *savedpwd*
 void loadsavedPWD()
 {
-	free(pwd);
 	pwdlen = strlen(savedpwd);
-	pwd = malloc(pwdlen);
+	pwd = realloc(pwd, pwdlen);
 	strcpy(pwd, savedpwd);
 }
 
+// Copies (*keepoldFile* = 1) or cuts (*keepoldFile = 0) the file from *filecppwd* to *pwd*
 void copycutFile(int keepoldFile)
 {
 	char *command = malloc(10+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 9 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname) + 4 for quotes
@@ -178,6 +187,7 @@ void copycutFile(int keepoldFile)
 	free(command);
 }
 
+// Draws the top-right status line (current entry, offset, etc)
 void drawEntryCount(int offset, int currentry, int qtyEntries)
 {
 	--qtyEntries;
@@ -188,6 +198,7 @@ void drawEntryCount(int offset, int currentry, int qtyEntries)
 	moveprint(0, maxx-strlen(entrycntstring), entrycntstring);
 }
 
+// Draws the path *pwd* at the top-left corner
 void drawPath()
 {
 	move(0,0);
@@ -199,12 +210,16 @@ void drawPath()
 	}
 }
 
+// Converts *ch* into a lowercase letter if it isn't already lowercase
 char toLower(char ch)
 {
 	if (ch>='A'&&ch<='Z') return ch+32;
 	return ch;
 }
 
+// The next four functions use sortingmethod's lowest byte to determine whether to invert the result or not.
+
+// Sorts entries alphabetically, used as compar() by scandir()
 int alphabeticsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	uint8_t len1 = strlen((*dirent1)->d_name), len2 = strlen((*dirent2)->d_name);
@@ -225,6 +240,7 @@ int alphabeticsort(const struct dirent **dirent1, const struct dirent **dirent2)
 	return len1>len2?1:-1;
 }
 
+// Sorts entries by size, used as compar() by scandir()
 int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
@@ -238,6 +254,7 @@ int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 	return size>statstruct.st_size?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
+// Sorts entries by time last accessed, used as compar() by scandir()
 int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
@@ -251,6 +268,7 @@ int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent
 	return accessedtime>statstruct.st_atime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
+// Sorts entries by time last modified, used as compar() by scandir()
 int lastmodifiedsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
@@ -264,6 +282,7 @@ int lastmodifiedsort(const struct dirent **dirent1, const struct dirent **dirent
 	return modifiedtime>statstruct.st_mtime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
+// Returns 1 if the entry *entry* is a directory, used as filter() by scandir()
 int dirfilter(const struct dirent *entry)
 {
 	if (entry->d_name[0]=='.'&&(entry->d_name[1]==0||(entry->d_name[1]=='.'&&entry->d_name[2]==0))) return 0;
@@ -278,6 +297,7 @@ int dirfilter(const struct dirent *entry)
 	return 0;
 }
 
+// Returns 1 if the entry *entry* is not a directory, used as filter() by scandir()
 int filefilter(const struct dirent *entry)
 {
 	if (!strcasestr(entry->d_name, filter)) return 0;
@@ -290,6 +310,7 @@ int filefilter(const struct dirent *entry)
 	return 0;
 }
 
+// Gets the file list using scandir(), returning them as return value and returning the quanitity of them as *qtyEntries*
 entry_t *getFileList(int *qtyEntries)
 {
 	char *fileName;
@@ -334,6 +355,7 @@ entry_t *getFileList(int *qtyEntries)
 	return fileList;
 }
 
+// Frees the file list allocated by getFileList() function
 void freeFileList(entry_t *fileList, int qtyEntries)
 {
 	for (int i = 0; i<qtyEntries; ++i)
@@ -344,6 +366,7 @@ void freeFileList(entry_t *fileList, int qtyEntries)
 	free(fileList);
 }
 
+// Draws entries starting from entries[offset] until entries[offset+maxy] or entries[qtyEntries] (whichever is lower)
 void drawObjects(entry_t *entries, int offset, int qtyEntries)
 {
 	move(1,0);
@@ -362,11 +385,13 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 	wrattr(NORMAL);
 }
 
+// Prints access denied message
 void accessdenied()
 {
 	moveprint(1,0,"Access denied");
 }
 
+// Removes the last directory from *pwd* and copies the removed string to *backpath*
 char *goback(char *backpath)
 {
 	filter = realloc(filter, 1);
@@ -385,6 +410,7 @@ char *goback(char *backpath)
 	return backpath;
 }
 
+// Checks if the entry ( *entries[*entryID]* ) is a file, link or directory. If it is a link, determines whether the link is pointing to a file or a directory. In both cases, if entry is a directory, opens it and gets the file list there. If entry is a file, opens it in a file editor determined by environment variable EDITOR
 entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offset)
 {
 	filter = realloc(filter, 1);
@@ -468,6 +494,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 	return entries;
 }
 
+// Deletes a file at *pwd* + *file*
 void deleteFile(char *file)
 {
 	char *command = malloc(8+pwdlen+strlen(file));
@@ -489,6 +516,7 @@ void deleteFile(char *file)
 	free(command);
 }
 
+// Calls the function to edit the filename on line *offset*+1
 void editfname(entry_t *entry, int offset)
 {
 	char *oldname = malloc(strlen(entry->name)+1);
@@ -556,6 +584,7 @@ void editfname(entry_t *entry, int offset)
 	free(command);
 }
 
+// Attempts to find entry with name *entryname* in *entries* with length *qtyEntries*
 int findentry(char *entryname, entry_t *entries, int qtyEntries)
 {
 	for (int i = 0; i<qtyEntries; ++i)
@@ -565,6 +594,7 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 	return -1;
 }
 
+// Opens search menu, sets *filter* to the phrase entered and regenerates file list
 void search(entry_t *entries, int *qtyEntries)
 {
 	moveprint(maxy, 0, ":");
@@ -608,6 +638,7 @@ void search(entry_t *entries, int *qtyEntries)
 	}
 }
 
+// Sets sorting function depending on *sortingmethod*'s value
 void setSortingFunction()
 {
 	if (sortingmethod>>1==ALPHABETICGROUP) sortingfunction = &alphabeticsort;
