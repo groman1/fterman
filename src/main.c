@@ -127,7 +127,7 @@ void deHighlightEntry(entry_t entry, int offset)
 	clearline();
 	wrattr(NORMAL|COLORPAIR(colorpair));
 	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
-	if (colorpair==REGFILECOLOR) printFileSize(entry.data.st_size, offset);
+	if (colorpair==REGFILECOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
 
@@ -142,7 +142,7 @@ void highlightEntry(entry_t entry, int offset)
 	clearline();
 	wrattr(REVERSE|COLORPAIR(colorpair));
 	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
-	if (colorpair==REGFILECOLOR) printFileSize(entry.data.st_size, offset);
+	if (colorpair==REGFILECOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
 
@@ -692,6 +692,7 @@ int main()
 			if (entries) 
 			{
 				entries = enterObject(entries, &currEntry, &qtyEntries, &offset);
+				offset = offset;
 			}	
 		}
 		else if (keypressed==config.goDown)
@@ -733,8 +734,8 @@ int main()
 				currEntry += maxy-1;
 				if (currEntry>qtyEntries-1)
 				{
-					if (offset>qtyEntries-maxy+1) offset -= maxy-1;
-					else offset = qtyEntries-maxy+1>0?qtyEntries-maxy+1:0;
+					if (offset>qtyEntries-1) offset -= maxy-1;
+					else offset = qtyEntries-maxy+1>0?qtyEntries-maxy+2:0;
 					currEntry = qtyEntries-1;
 				}
 				clear();
@@ -773,8 +774,8 @@ int main()
 				drawEntryCount(offset, currEntry, qtyEntries);
 				if (entries) freeFileList(entries, qtyEntries);
 				entries = getFileList(&qtyEntries);
-				currEntry = findentry(backpwd, entries, qtyEntries); 
-				offset = currEntry; // TEMPORARY
+				currEntry = findentry(backpwd, entries, qtyEntries);
+				offset = currEntry?currEntry-1:currEntry;
 				drawObjects(entries, offset, qtyEntries);
 				drawEntryCount(offset, currEntry, qtyEntries);
 				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);
