@@ -25,6 +25,7 @@ struct config_s
 	option_t search;
 	option_t cancelsearch;
 	option_t sortingmethod;
+	option_t showsize;
 };
 
 xml *config;
@@ -121,7 +122,7 @@ struct config_s loadConfig()
 		printf("The config file is empty, run make install-config\n");
 		exit(1);
 	}
-	if (config->tagQty!=17)
+	if (config->tagQty!=18)
 	{
 		deinit();
 		setcursor(1);
@@ -145,6 +146,7 @@ struct config_s loadConfig()
 	configstruct.search = strTooption_t(config->dataArr[14].value.str);
 	configstruct.cancelsearch = strTooption_t(config->dataArr[15].value.str);
 	configstruct.sortingmethod = config->dataArr[16].value.str[0]-48;
+	configstruct.showsize = config->dataArr[17].value.str[0]-48;
 	free(confstring);
 	fclose(configFile);
 	return configstruct;
@@ -175,8 +177,10 @@ struct config_s drawSettings()
 	moveprint(0,0, "Keybinds			(press q to exit)\n");
 	char *settings[] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method" };
 	char *sortingmethods[] = { "Alphabetic (A-Z)", "Alphabetic (Z-A)", "Size (low to high)", "Size (high to low)", "Last accessed (old to new)", "Last accessed (new to old)", "Last modified (old to new)", "Last modified (new to old)" };
+	char *sizestatetext[] = { "Hide size", "Show size" };
 	for (int i = 0; i<17; ++i) moveprint(1+i, 0, settings[i]);
 	moveprint(18, 0, sortingmethods[config->dataArr[16].value.str[0]-48]);
+	moveprint(19, 0, sizestatetext[config->dataArr[17].value.str[0]-48]);
 
 	highlightSetting(0, settings[0]);
 	option_t ch;
@@ -185,14 +189,19 @@ struct config_s drawSettings()
 		switch (ch)
 		{
 			case 13: 
-			{	if (currLine!=17)
-				{ 
+			{	if (currLine<17)
+				{
 					bindSetting(currLine, settings[currLine]);	
 					ch = inesc(); 
 					config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); 
 					option_tToStr(ch, config->dataArr[currLine].value.str); 
-					highlightSetting(currLine, settings[currLine]); 
-				} 
+					highlightSetting(currLine, settings[currLine]);
+				}
+				else if (currLine==18)
+				{
+					config->dataArr[17].value.str[0] += config->dataArr[17].value.str[0]==48?1:-1;
+					highlightSetting(18, sizestatetext[config->dataArr[17].value.str[0]-48]);
+				}
 				break;	
 			}
 			case 190:
@@ -219,37 +228,49 @@ struct config_s drawSettings()
 			}
 			case 189:
 			{	
-				if (currLine<17) 
+				if (currLine<18)
 				{
-					dehighlightSetting(currLine, settings[currLine]); 
 					if (currLine==15)
 					{
+						dehighlightSetting(currLine, settings[currLine]); 
 						++currLine;
 						highlightSetting(++currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
 					}
-					else
-					{
-						highlightSetting(++currLine, settings[currLine+1]);
-					}
-				} 
-				break;	
-			}
-			case 188:
-			{	
-				if (currLine>0) 
-				{ 
-					if (currLine==17)
+					else if (currLine==17)
 					{
 						dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
-						--currLine; 
+						highlightSetting(++currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+					}
+					else
+					{
+						dehighlightSetting(currLine, settings[currLine]); 
+						highlightSetting(++currLine, settings[currLine+1]);
+					}
+				}
+				break;
+			}
+			case 188:
+			{
+				if (currLine>0)
+				{
+					if (currLine==17)
+					{
+						dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
+						--currLine;
+						highlightSetting(--currLine, settings[currLine-1]); 
+					}
+					else if (currLine==18)
+					{
+						dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+						highlightSetting(--currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
 					}
 					else
 					{
 						dehighlightSetting(currLine, settings[currLine]);
+						highlightSetting(--currLine, settings[currLine-1]); 
 					}
-					highlightSetting(--currLine, settings[currLine-1]); 
-				} 
-				break;	
+				}
+				break;
 			}
 			default: break;
 		}

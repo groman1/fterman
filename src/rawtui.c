@@ -35,7 +35,6 @@ void init()
 	struct termios terminal;
 	cfmakeraw(&terminal);
 	tcsetattr(STDIN_FILENO, 0, &terminal);
-	initcolorpair(0, WHITE, BLACK);
 	write(STDOUT_FILENO, "\x1b[?1049h", 8); // alternative buffer
 }
 
@@ -165,9 +164,12 @@ void wrattr(attr_t attr)
 	if (attr&BOLD) write(STDOUT_FILENO, "\x1b[1m", 4);
 	if (attr&FAINT) write(STDOUT_FILENO, "\x1b[2m", 4);
 	if (attr&REVERSE) write(STDOUT_FILENO, "\x1b[7m", 4);
-	char colorstring[8] = "\x1b[30;47m";
-	colorstring[3] = (pairs[attr>>5]>>4)+48;
-	colorstring[6] = (pairs[attr>>5]%16)+48;
+	char colorstring[8] = "\x1b[39;49m";
+	if (attr>>5)
+	{
+		colorstring[3] = (pairs[attr>>5]>>4)+48;
+		if (pairs[attr>>5]%16) colorstring[6] = (pairs[attr>>5]%16)+48;
+	}
 	write(STDOUT_FILENO, colorstring, 8);
 }
 

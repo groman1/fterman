@@ -25,7 +25,7 @@
 
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
 uint16_t maxx, maxy, pwdlen;
-int8_t keepoldFile, sortingmethod;
+int8_t keepoldFile, sortingmethod, showsize;
 char *pwd, *filter, *savedpwd, *filecppwd;
 
 typedef struct
@@ -379,7 +379,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		clearline();
 		wrattr(COLORPAIR(currPair));
 		printName(entries[i].name, strlen(entries[i].name), i-offset, 0);
-		if (currPair==REGFILECOLOR) printFileSize(entries[i].data.st_size, i-offset);
+		if (currPair==REGFILECOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
 	wrattr(NORMAL);
@@ -651,6 +651,7 @@ int main()
 {
 	struct option_s config = loadConfig();
 	sortingmethod = config.sortingmethod;
+	showsize = config.showsize;
 	setSortingFunction();
 	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
 	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
@@ -809,6 +810,7 @@ int main()
 		{	
 			config = drawSettings(); 
 			sortingmethod = config.sortingmethod;
+			showsize = config.showsize;
 			setSortingFunction();
 			currEntry = offset = 0; 
 			clear();
