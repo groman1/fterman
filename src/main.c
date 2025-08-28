@@ -385,7 +385,7 @@ char *goback(char *backpath)
 	return backpath;
 }
 
-entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int offset)
+entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offset)
 {
 	filter = realloc(filter, 1);
 	filter[0] = 0;
@@ -428,6 +428,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int offset
 			accessdenied();
 		}
 		*entryID = 0;
+		*offset = 0;
 	}
 	else
 	{
@@ -460,9 +461,9 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int offset
 		setcursor(0);
 		clear();
 		drawPath();
-		drawEntryCount(offset, *entryID, *qtyEntries);
-		drawObjects(entries, offset, *qtyEntries);
-		highlightEntry(entries[*entryID], *entryID-offset);
+		drawEntryCount(*offset, *entryID, *qtyEntries);
+		drawObjects(entries, *offset, *qtyEntries);
+		highlightEntry(entries[*entryID], *entryID-*offset);
 	}
 	return entries;
 }
@@ -658,7 +659,7 @@ int main()
 		{	
 			if (entries) 
 			{
-				entries = enterObject(entries, &currEntry, &qtyEntries, offset);
+				entries = enterObject(entries, &currEntry, &qtyEntries, &offset);
 			}	
 		}
 		else if (keypressed==config.goDown)
