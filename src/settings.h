@@ -23,6 +23,7 @@ struct option_s
 	option_t cancelsearch;
 	option_t sortingmethod;
 	option_t showsize;
+	option_t searchtype;
 };
 
 struct option_s loadConfig();

@@ -26,6 +26,7 @@ struct config_s
 	option_t cancelsearch;
 	option_t sortingmethod;
 	option_t showsize;
+	option_t searchtype;
 };
 
 xml *config;
@@ -122,7 +123,7 @@ struct config_s loadConfig()
 		printf("The config file is empty, run make install-config\n");
 		exit(1);
 	}
-	if (config->tagQty!=18)
+	if (config->tagQty!=19)
 	{
 		deinit();
 		setcursor(1);
@@ -147,6 +148,7 @@ struct config_s loadConfig()
 	configstruct.cancelsearch = strTooption_t(config->dataArr[15].value.str);
 	configstruct.sortingmethod = config->dataArr[16].value.str[0]-48;
 	configstruct.showsize = config->dataArr[17].value.str[0]-48;
+	configstruct.searchtype = config->dataArr[18].value.str[0]-48;
 	free(confstring);
 	fclose(configFile);
 	return configstruct;
@@ -175,12 +177,15 @@ struct config_s drawSettings()
 	int currLine = 0;
 	clear();
 	moveprint(0,0, "Keybinds			(press q to exit)\n");
-	char *settings[] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method" };
+	char *settings[20] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method", "", "", "" };
 	char *sortingmethods[] = { "Alphabetic (A-Z)", "Alphabetic (Z-A)", "Size (low to high)", "Size (high to low)", "Last accessed (old to new)", "Last accessed (new to old)", "Last modified (old to new)", "Last modified (new to old)" };
 	char *sizestatetext[] = { "Hide size", "Show size" };
+	char *searchtext[] = { "Use static search", "Use dynamic search" };
+
 	for (int i = 0; i<17; ++i) moveprint(1+i, 0, settings[i]);
 	moveprint(18, 0, sortingmethods[config->dataArr[16].value.str[0]-48]);
 	moveprint(19, 0, sizestatetext[config->dataArr[17].value.str[0]-48]);
+	moveprint(20, 0, searchtext[config->dataArr[18].value.str[0]-48]);
 
 	highlightSetting(0, settings[0]);
 	option_t ch;
@@ -201,6 +206,11 @@ struct config_s drawSettings()
 				{
 					config->dataArr[17].value.str[0] += config->dataArr[17].value.str[0]==48?1:-1;
 					highlightSetting(18, sizestatetext[config->dataArr[17].value.str[0]-48]);
+				}
+				else if (currLine==19)
+				{
+					config->dataArr[18].value.str[0] += config->dataArr[18].value.str[0]==48?1:-1;
+					highlightSetting(19, searchtext[config->dataArr[18].value.str[0]-48]);
 				}
 				break;	
 			}
@@ -228,18 +238,23 @@ struct config_s drawSettings()
 			}
 			case 189:
 			{	
-				if (currLine<18)
+				if (currLine<19)
 				{
 					if (currLine==15)
 					{
-						dehighlightSetting(currLine, settings[currLine]); 
+						dehighlightSetting(currLine, settings[currLine]);
 						++currLine;
-						highlightSetting(++currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
+						highlightSetting(++currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
 					}
 					else if (currLine==17)
 					{
 						dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
 						highlightSetting(++currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+					}
+					else if (currLine==18)
+					{
+						dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+						highlightSetting(++currLine, searchtext[config->dataArr[18].value.str[0]-48]);
 					}
 					else
 					{
@@ -263,6 +278,11 @@ struct config_s drawSettings()
 					{
 						dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
 						highlightSetting(--currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
+					}
+					else if (currLine==19)
+					{
+						dehighlightSetting(currLine, searchtext[config->dataArr[18].value.str[0]-48]); 
+						highlightSetting(--currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
 					}
 					else
 					{
