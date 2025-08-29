@@ -11,6 +11,7 @@
 #define REGFILECOLOR 0
 #define DIRECTORYCOLOR 1
 #define SYMLINKCOLOR 2
+#define BROKENSYMLINKCOLOR 4
 
 #define ALPHABETICGROUP 0
 #define SIZEGROUP 1
@@ -85,28 +86,51 @@ char *strccat(char *string1, const char *string2)
 }
 
 // Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
-void printName(char *name, int fileSizeLen, int offset, int currIndex)
+void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t isasymlink)
 {
 	move(1+offset, 0);
 	int i = strlen(name);
-	if (i+fileSizeLen+2>=maxx)
+	char *linkpath;
+	if (!showsize) fileSizeLen = 0;
+	if (isasymlink)
+	{
+		char *fullpath = strccat(pwd, name);
+		linkpath = realpath(fullpath, NULL);
+		free(fullpath);
+		if (linkpath==NULL)
+		{
+			wrattr(COLORPAIR(BROKENSYMLINKCOLOR));
+			isasymlink = 0;
+		}
+	}
+	if (i+fileSizeLen+1>=maxx)
 	{
 		print("..");
 		i -= maxx-fileSizeLen-4;
 	}
 	else i = 0;
-	dprintf(STDOUT_FILENO, "%s", &name[i]);
+	print(&name[i]);
 	i = strlen(name);
-	if (i+fileSizeLen+2<maxx)
+	if (i+fileSizeLen+1<maxx)
 	{
+		if (isasymlink)
+		{
+			if (i+fileSizeLen+1+strlen(linkpath)<maxx)
+			{
+				moveprint(1+offset, i, "->");
+				moveprint(1+offset, i+2, linkpath);
+			}
+		}
 		wrattr(NORMAL);
-		moveprint(1+offset, i, " ");
+		if (currIndex) moveprint(1+offset, i, " ");
 		move(1+offset, currIndex+1);
 	}
 	else
 	{
-		move(1+offset, maxx-(i-currIndex)-4);
+		move(1+offset, maxx-(i-currIndex)-fileSizeLen-1);
+		wrattr(NORMAL);
 	}
+	if (isasymlink) free(linkpath);
 }
 
 // Prints file size *size* at offset *offset*
@@ -126,7 +150,7 @@ void deHighlightEntry(entry_t entry, int offset)
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrattr(NORMAL|COLORPAIR(colorpair));
-	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR);
 	if (colorpair==REGFILECOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -141,7 +165,7 @@ void highlightEntry(entry_t entry, int offset)
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrattr(REVERSE|COLORPAIR(colorpair));
-	printName(entry.name, getIntLen(entry.data.st_size), offset, 0);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR);
 	if (colorpair==REGFILECOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -157,10 +181,8 @@ void savePWD()
 // Saves the path of an entry to copy/cut to *filecppwd*
 void savecpPWD(char *entry)
 {
-	filecppwd = realloc(filecppwd, pwdlen+strlen(entry)+2);
-	strcpy(filecppwd, pwd);
-	strcat(filecppwd, "/");
-	strcat(filecppwd, entry);
+	filecppwd = realloc(filecppwd, pwdlen+strlen(entry)+1);
+	filecppwd = strccat(pwd, entry);
 }
 
 // Loads the previously saved path by savePWD() at *savedpwd*
@@ -378,7 +400,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		else currPair = REGFILECOLOR;
 		clearline();
 		wrattr(COLORPAIR(currPair));
-		printName(entries[i].name, strlen(entries[i].name), i-offset, 0);
+		printName(entries[i].name, strlen(entries[i].name), i-offset, 0, currPair==SYMLINKCOLOR);
 		if (currPair==REGFILECOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
@@ -388,7 +410,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 // Prints access denied message
 void accessdenied()
 {
-	moveprint(1,0,"Access denied");
+	moveprint(1,0,"No files found");
 }
 
 // Removes the last directory from *pwd* and copies the removed string to *backpath*
@@ -527,16 +549,17 @@ void editfname(entry_t *entry, int offset)
 	
 	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
-	deHighlightEntry(*entry, offset);
 
 	setcursor(1);
-	printName(entry->name, currFileSizeLen, offset, currIndex);
+	move(offset+1, 0);
+	clearline();
+	printName(entry->name, currFileSizeLen, offset, currIndex, 0);
 	while((ch=inesc())&&ch!=10&&ch!=13)
 	{
 		switch(ch)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
-			{	if (filenameLen<256) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
+			{	if (filenameLen<255) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
 			case 127:
 			{	if (currIndex+1) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
 			case 3:
@@ -547,7 +570,7 @@ void editfname(entry_t *entry, int offset)
 			{	if (currIndex<filenameLen-1) { ++currIndex; } break; }
 			default: break;
 		}
-		printName(entry->name, currFileSizeLen, offset, currIndex);
+		printName(entry->name, currFileSizeLen, offset, currIndex, 0);
 	}
 
 	char *command = malloc(10+2*pwdlen+strlen(oldname)+strlen(entry->name)); // "mv "(3 bytes) + " + pwd + old filename + " + " " (1 byte) + " + pwd + new filename + ". As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
@@ -630,7 +653,7 @@ void search(entry_t *entries, int *qtyEntries)
 				break;
 			}
 			case 13: case 10:
-			{ 
+			{
 				setcursor(0); 
 				return; 
 			}
@@ -655,8 +678,14 @@ int main()
 	setSortingFunction();
 	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
 	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
+	initcolorpair(BROKENSYMLINKCOLOR, RED, BLACK); // broken symlink color
 	initcolorpair(3, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
+	if (maxx<40||maxy<4)
+	{
+		printf("The terminal window is too narrow\n");
+		return 1;
+	}
 	--maxy; // to fit the search bar
 
 	uint8_t keypressed;
