@@ -8,6 +8,10 @@
 #include <unistd.h>
 #include "settings.h"
 
+#define pwd pwdarr[currentWindow]
+#define filter filterarr[currentWindow]
+#define pwdlen pwdlenarr[currentWindow]
+
 #define REGFILECOLOR 0
 #define DIRECTORYCOLOR 1
 #define SYMLINKCOLOR 2
@@ -18,8 +22,11 @@
 #define ACCESSEDTIMEGROUP 2
 #define MODIFIEDTIMEGROUP 3
 
-#define redrawentries if (qtyEntries) freeFileList(entries, qtyEntries);\
+#define regenerateentries\
+				if (qtyEntries) freeFileList(entries, qtyEntries);\
 				entries = getFileList(&qtyEntries);\
+
+#define redrawentries\
 				drawObjects(entries, offset, qtyEntries);\
 				drawEntryCount(offset, currEntry, qtyEntries);\
 				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);\
@@ -27,12 +34,15 @@
 				{\
 					moveprint(maxy, 0, ":");\
 					moveprint(maxy, 1, filter);\
-				}
+				}\
+				char workspacestring[2] = "W";\
+				workspacestring[1] = currentWindow+49;\
+				moveprintsize(maxy, maxx-2, workspacestring, 2);
 
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
-uint16_t maxx, maxy, pwdlen;
-int8_t keepoldFile, sortingmethod, showsize, searchtype;
-char *pwd, *filter, *savedpwd, *filecppwd;
+uint16_t maxx, maxy, pwdlenarr[4];
+int8_t keepoldFile, sortingmethod, showsize, searchtype, currentWindow;
+char *pwdarr[4], *filterarr[4], *savedpwd, *filecppwd;
 
 typedef struct
 {
@@ -61,6 +71,18 @@ void strPushback(char *string, int startingIndex)
 		string[startingIndex] = string[startingIndex+1];
 	}
 	string[startingIndex] = 0;
+}
+
+// Pushes back *entries* starting at *startingIndex*, deleting the entry with index *startingIndex* and shortening the *entries* by 1
+entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
+{
+	free(entries[startingIndex].name);
+	for (; startingIndex<qtyEntries-1; ++startingIndex)
+	{
+		entries[startingIndex] = entries[startingIndex+1];
+	}
+	--qtyEntries;
+	entries = realloc(entries, sizeof(entry_t)*qtyEntries); // This causes errors in valgrind and sanitizer
 }
 
 // Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
@@ -637,7 +659,7 @@ void search(int qtyEntries)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
 			{ 
-				if (filterlen<255)
+				if (filterlen<maxx-2)
 				{
 					filter = realloc(filter, ++filterlen+1); 
 					filter[filterlen-1] = keypressed;
@@ -694,18 +716,31 @@ void setSortingFunction()
 	else if (sortingmethod>>1==ACCESSEDTIMEGROUP) sortingfunction = &lastaccessedsort;
 }
 
+
+// These macros will break everything if placed at the top
+#define currEntry currEntryarr[currentWindow]
+#define offset offsetarr[currentWindow]
+#define backpwd backpwdarr[currentWindow]
+#define qtyEntries qtyEntriesarr[currentWindow]
+#define entries entriesarr[currentWindow]
+
+
 int main()
 {
 	struct option_s config = loadConfig();
+
+	currentWindow = 0;
 	sortingmethod = config.sortingmethod;
 	showsize = config.showsize;
 	searchtype = config.searchtype;
 	setSortingFunction();
+
 	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
 	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
 	initcolorpair(BROKENSYMLINKCOLOR, RED, BLACK); // broken symlink color
 	initcolorpair(3, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
+
 	if (maxx<40||maxy<4)
 	{
 		printf("The terminal window is too narrow\n");
@@ -713,7 +748,7 @@ int main()
 	}
 	--maxy; // to fit the search bar
 
-	uint8_t keypressed;
+	uint8_t keypressed, windowsInitialised = 1, cutfromwindow = 0;
 	char *temppwd = getenv("PWD");
 	pwdlen = strlen(temppwd);
 	pwd = malloc(pwdlen+2);
@@ -722,13 +757,22 @@ int main()
 	pwd[pwdlen] = 0;
 	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
-	filter = malloc(1);
-	filter[0] = 0;
 
-	int qtyEntries = 0, currEntry = 0, offset = 0;
+	int qtyEntriesarr[4], currEntryarr[4], offsetarr[4];
+	char *backpwdarr[4];
+	for (int i = 0; i<4; ++i)
+	{
+		filterarr[i] = malloc(1);
+		filterarr[i][0] = 0;
+		backpwdarr[i] = NULL;
+		currEntryarr[i] = 0;
+		offsetarr[i] = 0;
+		qtyEntriesarr[i] = 0;
+	}
+
 	keepoldFile = -1;
-	char *backpwd = NULL;
-	entry_t *entries = getFileList(&qtyEntries);
+	entry_t *entriesarr[4];
+	entries = getFileList(&qtyEntries);
 	init();
 	setcursor(0);
 	clear();
@@ -736,6 +780,10 @@ int main()
 	drawEntryCount(0, 0, qtyEntries);
 	drawObjects(entries, 0, qtyEntries);
 	if (qtyEntries) highlightEntry(entries[0], 0);
+
+	char workspacestring[2] = "W";
+	workspacestring[1] = currentWindow+49;
+	moveprintsize(maxy, maxx-2, workspacestring, 2);
 
 	while (keypressed=inesc())
 	{
@@ -745,6 +793,7 @@ int main()
 		{	
 			if (qtyEntries) 
 			{
+				moveprintsize(maxy, maxx-2, workspacestring, 2);
 				entries = enterObject(entries, &currEntry, &qtyEntries, &offset);
 			}	
 		}
@@ -795,6 +844,7 @@ int main()
 				drawPath();
 				drawObjects(entries, offset, qtyEntries); 
 				drawEntryCount(offset, currEntry, qtyEntries);
+				moveprintsize(maxy, maxx-2, workspacestring, 2);
 				highlightEntry(entries[currEntry], currEntry-offset); 
 			}
 		}
@@ -811,45 +861,48 @@ int main()
 					currEntry = 0;
 				}
 				clear();
-				drawPath();
-				drawObjects(entries, offset, qtyEntries); 
-				drawEntryCount(offset, currEntry, qtyEntries);
-				highlightEntry(entries[currEntry], currEntry-offset); 
+				redrawentries;
 			}
 		}
 		else if (keypressed==config.goBack)
 		{	
-			if (pwdlen>1) 
-			{	
+			if (pwdlen>1)
+			{
 				backpwd = goback(backpwd);
 				clear();
 				drawPath();
-				drawEntryCount(offset, currEntry, qtyEntries);
-				if (qtyEntries) freeFileList(entries, qtyEntries);
-				entries = getFileList(&qtyEntries);
+				regenerateentries;
 				currEntry = findentry(backpwd, entries, qtyEntries);
 				offset = currEntry?currEntry-1:currEntry;
-				drawObjects(entries, offset, qtyEntries);
-				drawEntryCount(offset, currEntry, qtyEntries);
-				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);
+				redrawentries;
 			}	
 		}
 		else if (keypressed==config.deletefile)
 		{	
 			deleteFile(entries[currEntry].name); 
 			deHighlightEntry(entries[currEntry], currEntry-offset); 
+			entries = entriesPushback(entries, currEntry, qtyEntries);
 			clear();
 			drawPath();
-			if (currEntry==qtyEntries-1) 
+			if (currEntry==qtyEntries-1)
 			{ 
 				--currEntry; 
 				if (offset) --offset; 
-			} 
-			redrawentries;
+			}
+			--qtyEntries;
+			if (qtyEntries) 
+			{
+				redrawentries;
+			}
+			else 
+			{
+				accessdenied();
+			}
 		}
 		else if (keypressed==config.editfile)
 		{
 			editfname(&entries[currEntry], currEntry-offset); 
+			regenerateentries;
 			redrawentries;
 		}
 		else if (keypressed==config.savedir) savePWD();
@@ -862,11 +915,15 @@ int main()
 		else if (keypressed==15)
 		{	
 			config = drawSettings(); 
-			sortingmethod = config.sortingmethod;
+			if (sortingmethod!=config.sortingmethod) 
+			{
+				currEntry = offset = 0; 
+				sortingmethod = config.sortingmethod;
+				setSortingFunction();
+				regenerateentries;
+			}
 			showsize = config.showsize;
 			searchtype = config.searchtype;
-			setSortingFunction();
-			currEntry = offset = 0; 
 			clear();
 			drawPath();
 			redrawentries;
@@ -879,6 +936,7 @@ int main()
 		else if (keypressed==config.cut)
 		{
 			keepoldFile = 0;
+			cutfromwindow = currentWindow;
 			savecpPWD(entries[currEntry].name);
 		}
 		else if (keypressed==config.paste)
@@ -886,9 +944,14 @@ int main()
 			if (keepoldFile!=-1)
 			{
 				copycutFile(keepoldFile);
+				regenerateentries;
 				redrawentries;
 			}
-			if (keepoldFile==0) keepoldFile = -1;
+			if (keepoldFile==0) 
+			{
+				keepoldFile = -1;
+				cutfromwindow += 4;
+			}
 		}
 		else if (keypressed==config.search)
 		{
@@ -918,14 +981,37 @@ int main()
 			drawPath();
 			redrawentries;
 		}
+		else if (keypressed>='1'&&keypressed<='4')
+		{
+			uint8_t lastwindow = currentWindow;
+			currentWindow = keypressed-49;
+			if (!((windowsInitialised>>currentWindow)&1))
+			{
+				pwd = malloc(strlen(pwdarr[lastwindow])+1);
+				strcpy(pwd, pwdarr[lastwindow]);
+				pwdlen = pwdlenarr[lastwindow];
+				windowsInitialised|=1<<currentWindow;
+			}
+			workspacestring[1] = currentWindow+49;
+			clear();
+			drawPath();
+			if (cutfromwindow-4==currentWindow) regenerateentries;
+			redrawentries;
+		}
 		getTermXY(&maxy, &maxx);
 	}
 
-	freeFileList(entries, qtyEntries);
+	for (int i = 0; i<4; ++i)
+	{
+		if ((windowsInitialised>>currentWindow)&1)
+		{
+			free(pwdarr[i]);
+			if (backpwdarr[i]) free(backpwdarr[i]);
+			freeFileList(entriesarr[i], qtyEntriesarr[i]);
+		}
+		free(filterarr[i]);
+	}
 	free(savedpwd);
-	free(pwd);
-	free(backpwd);
-	free(filter);
 	free(filecppwd);
 	freeConfig();
 	setcursor(1);

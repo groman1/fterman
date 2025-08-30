@@ -15,4 +15,5 @@ Ctrl+C: copy a file\
 Ctrl+X: cut a file\
 Ctrl+V: paste a copied or cut file\
 /: search\
-?: show all entries (cancel search)
+?: show all entries (cancel search)\
+1-4: switch between workspaces
