@@ -28,3 +28,7 @@ Ctrl+V: paste a copied or cut file\
 - - Customizable colors for directories and symlinks
 - Symlink destinations are shown next to the symlinks
 - Broken symlinks have their own color
+# Notes
+- Modifying the config manually is not recommended
+# Copyright
+FTerMan, RawTUI and xmltools are licensed under GNU General Public License. See LICENSE for details

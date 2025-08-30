@@ -791,8 +791,8 @@ int main()
 		{	
 			if (qtyEntries) 
 			{
-				moveprintsize(maxy, maxx-2, workspacestring, 2);
 				entries = enterObject(entries, &currEntry, &qtyEntries, &offset);
+				moveprintsize(maxy, maxx-2, workspacestring, 2);
 			}	
 		}
 		else if (keypressed==config.goDown)

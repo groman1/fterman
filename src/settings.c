@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "xmltools.h"
+#include <string.h>
 
 #define option_t unsigned char
 
@@ -85,6 +86,7 @@ void highlightSetting(int offset, char *setting)
 	wrattr(NORMAL);
 }
 
+// Draws color example with attribute NORMAL and colorpair specified
 void drawColorOption(char *entrytype, uint8_t colorpair)
 {
 	wrattr(NORMAL|COLORPAIR(colorpair));
@@ -92,6 +94,7 @@ void drawColorOption(char *entrytype, uint8_t colorpair)
 	wrattr(NORMAL);
 }
 
+// Draws color example with attribute REVERSE and colorpair specified
 void highlightColorOption(char *entrytype, uint8_t colorpair)
 {
 	wrattr(REVERSE|COLORPAIR(colorpair));
@@ -113,9 +116,22 @@ void dehighlightSetting(int offset, char *setting)
 	moveprint(1+offset, 0, setting);
 }
 
-void updatecolorpair(int colorpairid)
+// Updates color pair specified
+void updatecolorpair(uint8_t colorpairid)
 {
 	initcolorpair(colorpairid, config->dataArr[18+colorpairid].value.str[0]-48, config->dataArr[18+colorpairid].value.str[1]-48);
+}
+
+int findkeybind(uint8_t keybind, uint8_t id)
+{
+	char keybind_s[3];
+	option_tToStr(keybind, (char*)keybind_s);
+	for (int i = 0; i<16; ++i)
+	{
+		if (i==id) continue;
+		if (!strcmp(keybind_s, config->dataArr[i].value.str)) return 1;
+	}
+	return 0;
 }
 
 // Loads config from *configFile* and returns it as return value
@@ -224,7 +240,8 @@ struct config_s drawSettings()
 			{	if (currLine<17)
 				{
 					bindSetting(currLine, settings[currLine]);	
-					ch = inesc(); 
+					do ch = inesc();
+					while (findkeybind(ch, currLine));
 					config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); 
 					option_tToStr(ch, config->dataArr[currLine].value.str); 
 					highlightSetting(currLine, settings[currLine]);
