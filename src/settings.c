@@ -4,6 +4,29 @@
 #include "xmltools.h"
 #include <string.h>
 
+const char *defaultconfigstring = "<option for=\"goUp\">188</option>\n\
+<option for=\"goDown\">189</option>\n\
+<option for=\"goUpLong\">186</option>\n\
+<option for=\"goDownLong\">187</option>\n\
+<option for=\"goFwd\">190</option>\n\
+<option for=\"editfile\">171</option>\n\
+<option for=\"deletefile\">183</option>\n\
+<option for=\"goBack\">191</option>\n\
+<option for=\"savedir\">19</option>\n\
+<option for=\"loaddir\">12</option>\n\
+<option for=\"quit\">113</option>\n\
+<option for=\"copy\">3</option>\n\
+<option for=\"cut\">24</option>\n\
+<option for=\"paste\">22</option>\n\
+<option for=\"search\">47</option>\n\
+<option for=\"cancelsearch\">63</option>\n\
+<option for=\"sortingmethod\">0</option>\n\
+<option for=\"showsize\">1</option>\n\
+<option for=\"searchtype\">1</option>\n\
+<option for=\"directorycolor\">40</option>\n\
+<option for=\"symlinkcolor\">60</option>\n\
+<option for=\"brokensymlinkcolor\">10</option>";
+
 #define option_t unsigned char
 
 // Struct that stores all the keybinds and options necessary
@@ -34,7 +57,7 @@ xml *config;
 FILE *configFile;
 
 // Returns the minimum required string length to store a *num* in it
-unsigned char getShortLen(unsigned short num)
+unsigned char getShortLen(uint8_t num)
 {
 	unsigned short multiplier = 10, len = 1;
 	while (num/multiplier)
@@ -43,6 +66,23 @@ unsigned char getShortLen(unsigned short num)
 		multiplier*=10;
 	}
 	return len;
+}
+
+// Functions like strcat, but the result is stored in a malloc'd return value, not *string1*
+char *strccat(char *string1, const char *string2)
+{
+	char *result = malloc(strlen(string1)+strlen(string2)+1);
+	int x, i;
+	for (x = 0; string1[x]; ++x)
+	{
+		result[x] = string1[x];
+	}
+	for (i = 0; string2[i]; ++i)
+	{
+		result[i+x] = string2[i];
+	}
+	result[i+x] = 0;
+	return result;
 }
 
 // Converts *keybind* to string and puts it in *dest*
@@ -55,7 +95,6 @@ void option_tToStr(option_t keybind, char *dest)
 		dest[len--] = keybind/multiplier%10+48;
 		multiplier*=10;
 	}
-	
 }
 
 // Converts *string* to option_t and return it as return value
@@ -138,9 +177,17 @@ int findkeybind(uint8_t keybind, uint8_t id)
 struct config_s loadConfig()
 {
 	struct config_s configstruct;
-	configFile = fopen("/etc/fterman/fterman.conf", "r");
+	char *homepwd = getenv("HOME");
+	char *configPath = strccat(homepwd, "/.config/fterman.conf");
+	configFile = fopen(configPath, "r");
 	if (!configFile)
-	{	deinit(); setcursor(1); printf("No config file detected, you probably didn't run make install\n"); exit(1);	}
+	{
+createconfig:
+		configFile = fopen(configPath, "w");
+		fputs(defaultconfigstring, configFile);
+		fclose(configFile);
+		configFile = fopen(configPath, "r");
+	}
 	char *confstring = malloc(1), buff;
 	int i;
 	for (i = 0; (buff=getc(configFile))!=EOF; ++i)
@@ -152,19 +199,10 @@ struct config_s loadConfig()
 	confstring[i] = 0;
 
 	config = parseXML(confstring);
-	if (config==(void*)0x10)
+	if (config==(void*)0x10||config->tagQty!=22) // 0 length file or outdated config
 	{
-		setcursor(1);
-		deinit();
-		printf("The config file is empty, run make install-config\n");
-		exit(1);
-	}
-	if (config->tagQty!=22)
-	{
-		setcursor(1);
-		deinit();
-		printf("Invalid config detected, run make install-config\n");
-		exit(1);
+		fclose(configFile);
+		goto createconfig;
 	}
 	configstruct.goUp = strTooption_t(config->dataArr[0].value.str);
 	configstruct.goDown = strTooption_t(config->dataArr[1].value.str);
@@ -189,6 +227,7 @@ struct config_s loadConfig()
 	updatecolorpair(2);
 	updatecolorpair(3);
 	free(confstring);
+	free(configPath);
 	fclose(configFile);
 	return configstruct;
 }
@@ -196,11 +235,14 @@ struct config_s loadConfig()
 // Writes config *config* at *configFile*
 void saveConfig()
 {
-	configFile = fopen("/etc/fterman/fterman.conf", "w+");
+	char *homepwd = getenv("HOME");
+	char *configPath = strccat(homepwd, "/.config/fterman.conf");
+	configFile = fopen(configPath, "w+");
 	char *configString = xmlToString(config);
 	fputs(configString, configFile);
 	fclose(configFile);
 	free(configString);
+	free(configPath);
 	freeXML(config);
 }
 
@@ -242,7 +284,7 @@ struct config_s drawSettings()
 					bindSetting(currLine, settings[currLine]);	
 					do ch = inesc();
 					while (findkeybind(ch, currLine));
-					config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)); 
+					config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)+1);
 					option_tToStr(ch, config->dataArr[currLine].value.str); 
 					highlightSetting(currLine, settings[currLine]);
 				}

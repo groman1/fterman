@@ -22,9 +22,5 @@ sanitize: LDFLAGS := -fsanitize=address
 sanitize: CFLAGS += -g
 sanitize: fterman
 
-install: install-config
+install:
 	$(INSTALL) fterman /usr/bin/fterman
-
-install-config:
-	$(INSTALL) -d /etc/fterman
-	$(INSTALL) -m 666 example.conf /etc/fterman/fterman.conf

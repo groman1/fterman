@@ -30,5 +30,6 @@ struct option_s loadConfig();
 void saveConfig();
 void freeConfig();
 struct option_s drawSettings();
+char *strccat(char*, const char*);
 
 #endif

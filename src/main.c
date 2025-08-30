@@ -97,23 +97,6 @@ void strPushfwd(char *string, int startingIndex, int stringLen) // assume string
 	string[stringLen+1] = 0;
 }
 
-// Functions like strcat, but the result is stored in a malloc'd return value, not *string1*
-char *strccat(char *string1, const char *string2)
-{
-	char *result = malloc(strlen(string1)+strlen(string2)+1);
-	int x, i;
-	for (x = 0; string1[x]; ++x)
-	{
-		result[x] = string1[x];
-	}
-	for (i = 0; string2[i]; ++i)
-	{
-		result[i+x] = string2[i];
-	}
-	result[i+x] = 0;
-	return result;
-}
-
 // Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
 void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t isasymlink)
 {
