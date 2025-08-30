@@ -72,7 +72,7 @@ option_t strTooption_t(char *string)
 // Rewrites the current string *setting* with color pair 4 enabled at line *offset*
 void bindSetting(int offset, char *setting)
 {
-	wrattr(COLORPAIR(4));
+	wrattr(NORMAL|COLORPAIR(4));
 	moveprint(1+offset, 0, setting);
 	wrattr(NORMAL);
 }
@@ -87,7 +87,7 @@ void highlightSetting(int offset, char *setting)
 
 void drawColorOption(char *entrytype, uint8_t colorpair)
 {
-	wrattr(COLORPAIR(colorpair));
+	wrattr(NORMAL|COLORPAIR(colorpair));
 	moveprint(21, 0, entrytype);
 	wrattr(NORMAL);
 }
@@ -109,12 +109,13 @@ void clearSettingLine(int line)
 // Rewrites the current string *setting* with NORMAL attribute enabled at line *offset*
 void dehighlightSetting(int offset, char *setting)
 {
+	wrattr(NORMAL);
 	moveprint(1+offset, 0, setting);
 }
 
 void updatecolorpair(int colorpairid)
 {
-	initcolorpair(colorpairid, config->dataArr[18+colorpairid].value.str[1]-48, config->dataArr[18+colorpairid].value.str[0]-48);
+	initcolorpair(colorpairid, config->dataArr[18+colorpairid].value.str[0]-48, config->dataArr[18+colorpairid].value.str[1]-48);
 }
 
 // Loads config from *configFile* and returns it as return value
@@ -137,15 +138,15 @@ struct config_s loadConfig()
 	config = parseXML(confstring);
 	if (config==(void*)0x10)
 	{
-		deinit();
 		setcursor(1);
+		deinit();
 		printf("The config file is empty, run make install-config\n");
 		exit(1);
 	}
 	if (config->tagQty!=22)
 	{
-		deinit();
 		setcursor(1);
+		deinit();
 		printf("Invalid config detected, run make install-config\n");
 		exit(1);
 	}
@@ -168,9 +169,9 @@ struct config_s loadConfig()
 	configstruct.sortingmethod = config->dataArr[16].value.str[0]-48;
 	configstruct.showsize = config->dataArr[17].value.str[0]-48;
 	configstruct.searchtype = config->dataArr[18].value.str[0]-48;
-	initcolorpair(1, config->dataArr[19].value.str[0]-48, config->dataArr[19].value.str[1]-48);
-	initcolorpair(2, config->dataArr[20].value.str[0]-48, config->dataArr[20].value.str[1]-48);
-	initcolorpair(3, config->dataArr[21].value.str[0]-48, config->dataArr[21].value.str[1]-48);
+	updatecolorpair(1);
+	updatecolorpair(2);
+	updatecolorpair(3);
 	free(confstring);
 	fclose(configFile);
 	return configstruct;
@@ -266,7 +267,7 @@ struct config_s drawSettings()
 						++config->dataArr[19+currentrytype].value.str[0];
 						updatecolorpair(currentrytype+1);
 						clearSettingLine(20);
-						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						drawColorOption(entrytypes[currentrytype], currentrytype+1);
 						break;
 					}
 					case 22:
@@ -307,7 +308,7 @@ struct config_s drawSettings()
 						--config->dataArr[19+currentrytype].value.str[0];
 						updatecolorpair(currentrytype+1);
 						clearSettingLine(20);
-						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						drawColorOption(entrytypes[currentrytype], currentrytype+1);
 						break;
 					}
 					case 22:
@@ -316,7 +317,7 @@ struct config_s drawSettings()
 						--config->dataArr[19+currentrytype].value.str[1];
 						updatecolorpair(currentrytype+1);
 						clearSettingLine(20);
-						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						drawColorOption(entrytypes[currentrytype], currentrytype+1);
 						break;
 					}
 					default: break;

@@ -738,7 +738,7 @@ int main()
 	searchtype = config.searchtype;
 	setSortingFunction();
 
-	initcolorpair(3, BLACK, GREEN);
+	initcolorpair(4, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
 
 	if (maxx<40||maxy<25)
