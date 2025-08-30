@@ -17,3 +17,14 @@ Ctrl+V: paste a copied or cut file\
 /: search\
 ?: show all entries (cancel search)\
 1-4: switch between workspaces
+# Features
+- Fast sorting with 4 options available (by size, last modified/accessed time and alphabetically)
+- A search function
+- 4 workspaces
+- A function to save your current directory so you can open it on another workspace
+- Built-in settings menu with:
+- - Customizable keybinds (all default keybinds except for workspace keys)
+- - Useful options (show/hide file size, use dynamic/static search)
+- - Customizable colors for directories and symlinks
+- Symlink destinations are shown next to the symlinks
+- Broken symlinks have their own color

@@ -15,7 +15,7 @@
 #define REGFILECOLOR 0
 #define DIRECTORYCOLOR 1
 #define SYMLINKCOLOR 2
-#define BROKENSYMLINKCOLOR 4
+#define BROKENSYMLINKCOLOR 3
 
 #define ALPHABETICGROUP 0
 #define SIZEGROUP 1
@@ -30,6 +30,7 @@
 				drawObjects(entries, offset, qtyEntries);\
 				drawEntryCount(offset, currEntry, qtyEntries);\
 				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);\
+				else accessdenied();\
 				if (filter[0])\
 				{\
 					moveprint(maxy, 0, ":");\
@@ -368,7 +369,8 @@ entry_t *getFileList(int *qtyEntries)
 	int n;
 	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
 
-	if (n==-1) return 0;
+	if (n==-1) 
+	{ *qtyEntries = 0; return 0; }
 	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
 	{
@@ -384,7 +386,8 @@ entry_t *getFileList(int *qtyEntries)
 	*qtyEntries = n;
 	n = scandir(pwd, &entries, &filefilter, sortingfunction);
 
-	if (n==-1) return 0;
+	if (n==-1) 
+	{ *qtyEntries = 0; return 0; }
 	fileList = realloc(fileList, (*qtyEntries+n)*sizeof(entry_t));
 	offset = 0;
 
@@ -487,7 +490,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		pwd[pwdlen] = 0;
 		freeFileList(entries, *qtyEntries);
 		entries = getFileList(qtyEntries);	
-		if (qtyEntries) 
+		if (*qtyEntries) 
 		{
 			clear();
 			drawPath();
@@ -735,15 +738,12 @@ int main()
 	searchtype = config.searchtype;
 	setSortingFunction();
 
-	initcolorpair(DIRECTORYCOLOR, BLUE, BLACK); // directory color
-	initcolorpair(SYMLINKCOLOR, CYAN, BLACK); // symlink color
-	initcolorpair(BROKENSYMLINKCOLOR, RED, BLACK); // broken symlink color
 	initcolorpair(3, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
 
-	if (maxx<40||maxy<4)
+	if (maxx<40||maxy<25)
 	{
-		printf("The terminal window is too narrow\n");
+		printf("The terminal window is too small\n");
 		return 1;
 	}
 	--maxy; // to fit the search bar
@@ -861,6 +861,7 @@ int main()
 					currEntry = 0;
 				}
 				clear();
+				drawPath();
 				redrawentries;
 			}
 		}
@@ -991,11 +992,13 @@ int main()
 				strcpy(pwd, pwdarr[lastwindow]);
 				pwdlen = pwdlenarr[lastwindow];
 				windowsInitialised|=1<<currentWindow;
+				regenerateentries;
 			}
 			workspacestring[1] = currentWindow+49;
 			clear();
 			drawPath();
-			if (cutfromwindow-4==currentWindow) regenerateentries;
+			if (cutfromwindow-4==currentWindow) 
+			{ regenerateentries; cutfromwindow = 0; }
 			redrawentries;
 		}
 		getTermXY(&maxy, &maxx);

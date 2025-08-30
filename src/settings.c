@@ -69,10 +69,10 @@ option_t strTooption_t(char *string)
 	return keybind;
 }
 
-// Rewrites the current string *setting* with color pair 3 enabled at line *offset*
+// Rewrites the current string *setting* with color pair 4 enabled at line *offset*
 void bindSetting(int offset, char *setting)
 {
-	wrattr(COLORPAIR(3));
+	wrattr(COLORPAIR(4));
 	moveprint(1+offset, 0, setting);
 	wrattr(NORMAL);
 }
@@ -82,6 +82,20 @@ void highlightSetting(int offset, char *setting)
 {
 	wrattr(REVERSE);
 	moveprint(1+offset, 0, setting);
+	wrattr(NORMAL);
+}
+
+void drawColorOption(char *entrytype, uint8_t colorpair)
+{
+	wrattr(COLORPAIR(colorpair));
+	moveprint(21, 0, entrytype);
+	wrattr(NORMAL);
+}
+
+void highlightColorOption(char *entrytype, uint8_t colorpair)
+{
+	wrattr(REVERSE|COLORPAIR(colorpair));
+	moveprint(21, 0, entrytype);
 	wrattr(NORMAL);
 }
 
@@ -96,6 +110,11 @@ void clearSettingLine(int line)
 void dehighlightSetting(int offset, char *setting)
 {
 	moveprint(1+offset, 0, setting);
+}
+
+void updatecolorpair(int colorpairid)
+{
+	initcolorpair(colorpairid, config->dataArr[18+colorpairid].value.str[1]-48, config->dataArr[18+colorpairid].value.str[0]-48);
 }
 
 // Loads config from *configFile* and returns it as return value
@@ -123,7 +142,7 @@ struct config_s loadConfig()
 		printf("The config file is empty, run make install-config\n");
 		exit(1);
 	}
-	if (config->tagQty!=19)
+	if (config->tagQty!=22)
 	{
 		deinit();
 		setcursor(1);
@@ -149,6 +168,9 @@ struct config_s loadConfig()
 	configstruct.sortingmethod = config->dataArr[16].value.str[0]-48;
 	configstruct.showsize = config->dataArr[17].value.str[0]-48;
 	configstruct.searchtype = config->dataArr[18].value.str[0]-48;
+	initcolorpair(1, config->dataArr[19].value.str[0]-48, config->dataArr[19].value.str[1]-48);
+	initcolorpair(2, config->dataArr[20].value.str[0]-48, config->dataArr[20].value.str[1]-48);
+	initcolorpair(3, config->dataArr[21].value.str[0]-48, config->dataArr[21].value.str[1]-48);
 	free(confstring);
 	fclose(configFile);
 	return configstruct;
@@ -174,18 +196,22 @@ void freeConfig()
 // Draws the main settings menu, returns the updated config
 struct config_s drawSettings()
 {
-	int currLine = 0;
+	uint8_t currLine = 0, currentrytype = 0;
 	clear();
 	moveprint(0,0, "Keybinds			(press q to exit)\n");
 	char *settings[20] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method", "", "", "" };
-	char *sortingmethods[] = { "Alphabetic (A-Z)", "Alphabetic (Z-A)", "Size (low to high)", "Size (high to low)", "Last accessed (old to new)", "Last accessed (new to old)", "Last modified (old to new)", "Last modified (new to old)" };
+	char *sortingmethods[] = { "< Alphabetic (A-Z) >", "< Alphabetic (Z-A) >", "< Size (low to high) >", "< Size (high to low) >", "< Last accessed (old to new) >", "< Last accessed (new to old) >", "< Last modified (old to new) >", "< Last modified (new to old) >" };
 	char *sizestatetext[] = { "Hide size", "Show size" };
 	char *searchtext[] = { "Use static search", "Use dynamic search" };
+	char *entrytypes[] = { "< Directory >", "< Symlink >", "< Broken symlink >" };
+	char *colortext[] = { "< Foreground color >", "< Background color >" };
 
 	for (int i = 0; i<17; ++i) moveprint(1+i, 0, settings[i]);
 	moveprint(18, 0, sortingmethods[config->dataArr[16].value.str[0]-48]);
 	moveprint(19, 0, sizestatetext[config->dataArr[17].value.str[0]-48]);
 	moveprint(20, 0, searchtext[config->dataArr[18].value.str[0]-48]);
+	drawColorOption(entrytypes[0], 1);
+	for (int i = 0; i<2; ++i) moveprint(22+i, 0, colortext[i]);
 
 	highlightSetting(0, settings[0]);
 	option_t ch;
@@ -193,7 +219,7 @@ struct config_s drawSettings()
 	{
 		switch (ch)
 		{
-			case 13: 
+			case 13: //enter
 			{	if (currLine<17)
 				{
 					bindSetting(currLine, settings[currLine]);	
@@ -214,80 +240,194 @@ struct config_s drawSettings()
 				}
 				break;	
 			}
-			case 190:
+			case 190: //right
 			{
-				if (currLine==17)
+				switch (currLine)
 				{
-					if (config->dataArr[16].value.str[0]==55) config->dataArr[16].value.str[0] = 47;
-					++config->dataArr[16].value.str[0];
-					clearSettingLine(17);
-					highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
+					case 17:
+					{
+						if (config->dataArr[16].value.str[0]==55) config->dataArr[16].value.str[0] = 47;
+						++config->dataArr[16].value.str[0];
+						clearSettingLine(17);
+						highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
+						break;
+					}
+					case 20:
+					{
+						if (currentrytype==2) currentrytype = -1;
+						++currentrytype;
+						clearSettingLine(20);
+						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						break;
+					}
+					case 21:
+					{
+						if (config->dataArr[19+currentrytype].value.str[0]==55) config->dataArr[19+currentrytype].value.str[0] = 47;
+						++config->dataArr[19+currentrytype].value.str[0];
+						updatecolorpair(currentrytype+1);
+						clearSettingLine(20);
+						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						break;
+					}
+					case 22:
+					{
+						if (config->dataArr[19+currentrytype].value.str[1]==55) config->dataArr[19+currentrytype].value.str[1] = 47;
+						++config->dataArr[19+currentrytype].value.str[1];
+						updatecolorpair(currentrytype+1);
+						clearSettingLine(20);
+						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						break;
+					}
 				}
 				break;
 			}
-			case 191:
+			case 191: //left
 			{
-				if (currLine==17)
+				switch (currLine)
 				{
-					if (config->dataArr[16].value.str[0]==48) config->dataArr[16].value.str[0] = 56;
-					--config->dataArr[16].value.str[0];
-					clearSettingLine(17);
-					highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
+					case 17:
+					{
+						if (config->dataArr[16].value.str[0]==48) config->dataArr[16].value.str[0] = 56;
+						--config->dataArr[16].value.str[0];
+						clearSettingLine(17);
+						highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
+						break;
+					}
+					case 20:
+					{
+						if (currentrytype==0) currentrytype = 3;
+						--currentrytype;
+						clearSettingLine(20);
+						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						break;
+					}
+					case 21:
+					{
+						if (config->dataArr[19+currentrytype].value.str[0]==48) config->dataArr[19+currentrytype].value.str[0] = 56;
+						--config->dataArr[19+currentrytype].value.str[0];
+						updatecolorpair(currentrytype+1);
+						clearSettingLine(20);
+						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						break;
+					}
+					case 22:
+					{
+						if (config->dataArr[19+currentrytype].value.str[1]==48) config->dataArr[19+currentrytype].value.str[1] = 56;
+						--config->dataArr[19+currentrytype].value.str[1];
+						updatecolorpair(currentrytype+1);
+						clearSettingLine(20);
+						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+						break;
+					}
+					default: break;
 				}
 				break;
 			}
-			case 189:
+			case 189: //down
 			{	
-				if (currLine<19)
+				if (currLine<22)
 				{
-					if (currLine==15)
+					switch (currLine)
 					{
-						dehighlightSetting(currLine, settings[currLine]);
-						++currLine;
-						highlightSetting(++currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
-					}
-					else if (currLine==17)
-					{
-						dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
-						highlightSetting(++currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
-					}
-					else if (currLine==18)
-					{
-						dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
-						highlightSetting(++currLine, searchtext[config->dataArr[18].value.str[0]-48]);
-					}
-					else
-					{
-						dehighlightSetting(currLine, settings[currLine]); 
-						highlightSetting(++currLine, settings[currLine+1]);
+						case 15:
+						{
+							dehighlightSetting(currLine, settings[currLine]);
+							++currLine;
+							highlightSetting(++currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
+							break;
+						}
+						case 17:
+						{
+							dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
+							highlightSetting(++currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+							break;
+						}
+						case 18:
+						{
+							dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+							highlightSetting(++currLine, searchtext[config->dataArr[18].value.str[0]-48]);
+							break;
+						}
+						case 19:
+						{
+							dehighlightSetting(currLine, searchtext[config->dataArr[18].value.str[0]-48]);
+							++currLine;
+							highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+							break;
+						}
+						case 20:
+						{
+							drawColorOption(entrytypes[currentrytype], currentrytype+1);
+							++currLine;
+							highlightSetting(currLine, colortext[currLine-21]);
+							break;
+						}
+						case 21:
+						{
+							dehighlightSetting(currLine, colortext[currLine-21]);
+							highlightSetting(++currLine, colortext[currLine-20]);
+							break;
+						}
+						default:
+						{
+							dehighlightSetting(currLine, settings[currLine]); 
+							highlightSetting(++currLine, settings[currLine+1]);
+							break;
+						}
 					}
 				}
 				break;
 			}
-			case 188:
+			case 188: //up
 			{
 				if (currLine>0)
 				{
-					if (currLine==17)
+					switch (currLine)
 					{
-						dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
-						--currLine;
-						highlightSetting(--currLine, settings[currLine-1]); 
-					}
-					else if (currLine==18)
-					{
-						dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
-						highlightSetting(--currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
-					}
-					else if (currLine==19)
-					{
-						dehighlightSetting(currLine, searchtext[config->dataArr[18].value.str[0]-48]); 
-						highlightSetting(--currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
-					}
-					else
-					{
-						dehighlightSetting(currLine, settings[currLine]);
-						highlightSetting(--currLine, settings[currLine-1]); 
+						case 17:
+						{
+							dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
+							--currLine;
+							highlightSetting(--currLine, settings[currLine-1]); 
+							break;
+						}
+						case 18:
+						{
+							dehighlightSetting(currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+							highlightSetting(--currLine, sortingmethods[config->dataArr[16].value.str[0]-48]); 
+							break;
+						}
+						case 19:
+						{
+							dehighlightSetting(currLine, searchtext[config->dataArr[18].value.str[0]-48]); 
+							highlightSetting(--currLine, sizestatetext[config->dataArr[17].value.str[0]-48]);
+							break;
+						}
+						case 20:
+						{
+							drawColorOption(entrytypes[currentrytype], currentrytype+1);
+							highlightSetting(--currLine, searchtext[config->dataArr[18].value.str[0]-48]);
+							break;
+						}
+						case 21:
+						{
+							dehighlightSetting(currLine, colortext[currLine-21]);
+							--currLine;
+							highlightColorOption(entrytypes[currentrytype], currentrytype+1);
+							break;
+						}
+						case 22:
+						{
+							dehighlightSetting(currLine, colortext[currLine-21]);
+							highlightSetting(--currLine, colortext[currLine-22]);
+							break;
+						}
+						default:
+						{
+							dehighlightSetting(currLine, settings[currLine]);
+							highlightSetting(--currLine, settings[currLine-1]); 
+							break;
+						}
 					}
 				}
 				break;
