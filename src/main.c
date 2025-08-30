@@ -75,7 +75,7 @@ void strPushback(char *string, int startingIndex)
 }
 
 // Pushes back *entries* starting at *startingIndex*, deleting the entry with index *startingIndex* and shortening the *entries* by 1
-entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
+void entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 {
 	free(entries[startingIndex].name);
 	for (; startingIndex<qtyEntries-1; ++startingIndex)
@@ -83,7 +83,7 @@ entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 		entries[startingIndex] = entries[startingIndex+1];
 	}
 	--qtyEntries;
-	entries = realloc(entries, sizeof(entry_t)*qtyEntries); // This causes errors in valgrind and sanitizer
+	entries = realloc(entries, sizeof(entry_t)*qtyEntries);
 }
 
 // Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
@@ -295,7 +295,7 @@ int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 	struct stat statstruct;
 	char *fullpath = strccat(pwd, (*dirent1)->d_name);
 	lstat(fullpath, &statstruct);
-	uint64_t size = statstruct.st_size;
+	uint32_t size = statstruct.st_size;
 	free(fullpath);
 	fullpath = strccat(pwd, (*dirent2)->d_name);
 	lstat(fullpath, &statstruct);
@@ -364,7 +364,7 @@ entry_t *getFileList(int *qtyEntries)
 {
 	char *fileName;
 	entry_t *fileList;
-	int currEntry = 0, currLength, offset = 0; // offset is the number of "." and ".." currently found
+	int currLength, offset = 0; // offset is the number of "." and ".." currently found
 	struct dirent **entries;
 	int n;
 	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
@@ -572,13 +572,10 @@ void editfname(entry_t *entry, int offset)
 {
 	char *oldname = malloc(strlen(entry->name)+1);
 	strcpy(oldname, entry->name);
-	int ch, currIndex = strlen(entry->name)-1, filenameLen = currIndex+1, currPair = REGFILECOLOR;
+	int ch, currIndex = strlen(entry->name)-1, filenameLen = currIndex+1;
 	
 	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = strlen(oldname)+1;
 	
-	if (S_ISDIR(entry->data.st_mode)) currPair = DIRECTORYCOLOR;
-	else if (S_ISLNK(entry->data.st_mode)) currPair = SYMLINKCOLOR;
-
 	setcursor(1);
 	move(offset+1, 0);
 	clearline();
@@ -649,7 +646,7 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 // Opens search menu, sets *filter* to the phrase entered and regenerates file list
 void search(int qtyEntries)
 {
-	entry_t *entries;
+	entry_t *entries = getFileList(&qtyEntries);
 	uint8_t filterlen = strlen(filter), keypressed;
 	if (searchtype) drawEntryCount(0, 0, qtyEntries);
 	moveprint(maxy, 0, ":");
@@ -785,7 +782,7 @@ int main()
 	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
 
-	while (keypressed=inesc())
+	while ((keypressed=inesc()))
 	{
 		if (keypressed==config.quit)
 		{	break;	}
@@ -882,7 +879,7 @@ int main()
 		{	
 			deleteFile(entries[currEntry].name); 
 			deHighlightEntry(entries[currEntry], currEntry-offset); 
-			entries = entriesPushback(entries, currEntry, qtyEntries);
+			entriesPushback(entries, currEntry, qtyEntries);
 			clear();
 			drawPath();
 			if (currEntry==qtyEntries-1)

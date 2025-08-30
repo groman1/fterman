@@ -202,7 +202,6 @@ void getCursorPos(uint16_t *y, uint16_t *x)
 	*y = 0;
 	*x = 0;
 	char buffer[2];
-	int currPos = 2;
 	read(STDIN_FILENO, buffer, 2);
 	for (int i = 0; i<3; ++i)
 	{

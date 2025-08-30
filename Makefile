@@ -1,18 +1,26 @@
-main: 
-	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -O2 -o fterman
-debug: 
-	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -o fterman-g -g
-sanitize:
-	cc src/main.c src/settings.c src/xmltools.c src/rawtui.c -fsanitize=address -o fterman-g -g
-install:
-	install -d /etc/fterman
-	install -m 666 example.conf /etc/fterman/fterman.conf
-	mv fterman /usr/bin
+OBJECTFILES := src/main.o src/settings.o src/xmltools.o src/rawtui.o
+CFLAGS := -Wall -Wextra -Werror -Wno-error=unused-but-set-parameter -O2
+RM := rm
+INSTALL := install
+
+fterman: $(OBJECTFILES)
+	$(CC) $(LDFLAGS) $^ -o $@
+
+clean: 
+	$(RM) $(OBJECTFILES) fterman
+
+src/%.o: src/%.c
+	$(CC) -c $< ${CFLAGS} -o $@ 
+
+debug: CFLAGS := -g
+debug: fterman
+
+sanitize: CFLAGS := -g -fsanitize=address
+sanitize: fterman
+
+install: install-config
+	$(INSTALL) fterman /usr/bin/fterman
+
 install-config:
-	install -d /etc/fterman
-	install -m 666 example.conf /etc/fterman/fterman.conf
-update: 
-	mv fterman /usr/bin
-uninstall:
-	rm -r /etc/fterman
-	rm /usr/bin/fterman
+	$(INSTALL) -d /etc/fterman
+	$(INSTALL) -m 666 example.conf /etc/fterman/fterman.conf

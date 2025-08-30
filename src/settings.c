@@ -366,13 +366,15 @@ struct config_s drawSettings()
 						case 21:
 						{
 							dehighlightSetting(currLine, colortext[currLine-21]);
-							highlightSetting(++currLine, colortext[currLine-20]);
+							++currLine;
+							highlightSetting(currLine, colortext[currLine-21]);
 							break;
 						}
 						default:
 						{
 							dehighlightSetting(currLine, settings[currLine]); 
-							highlightSetting(++currLine, settings[currLine+1]);
+							++currLine;
+							highlightSetting(currLine, settings[currLine+1]);
 							break;
 						}
 					}
@@ -388,8 +390,8 @@ struct config_s drawSettings()
 						case 17:
 						{
 							dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
-							--currLine;
-							highlightSetting(--currLine, settings[currLine-1]); 
+							currLine-=2;
+							highlightSetting(currLine, settings[currLine-1]); 
 							break;
 						}
 						case 18:
@@ -420,13 +422,15 @@ struct config_s drawSettings()
 						case 22:
 						{
 							dehighlightSetting(currLine, colortext[currLine-21]);
-							highlightSetting(--currLine, colortext[currLine-22]);
+							--currLine;
+							highlightSetting(currLine, colortext[currLine-21]);
 							break;
 						}
 						default:
 						{
 							dehighlightSetting(currLine, settings[currLine]);
-							highlightSetting(--currLine, settings[currLine-1]); 
+							--currLine;
+							highlightSetting(currLine, settings[currLine]); 
 							break;
 						}
 					}
