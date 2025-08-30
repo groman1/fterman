@@ -75,7 +75,7 @@ void strPushback(char *string, int startingIndex)
 }
 
 // Pushes back *entries* starting at *startingIndex*, deleting the entry with index *startingIndex* and shortening the *entries* by 1
-void entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
+entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 {
 	free(entries[startingIndex].name);
 	for (; startingIndex<qtyEntries-1; ++startingIndex)
@@ -84,6 +84,7 @@ void entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 	}
 	--qtyEntries;
 	entries = realloc(entries, sizeof(entry_t)*qtyEntries);
+	return entries;
 }
 
 // Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
@@ -879,7 +880,7 @@ int main()
 		{	
 			deleteFile(entries[currEntry].name); 
 			deHighlightEntry(entries[currEntry], currEntry-offset); 
-			entriesPushback(entries, currEntry, qtyEntries);
+			entries = entriesPushback(entries, currEntry, qtyEntries);
 			clear();
 			drawPath();
 			if (currEntry==qtyEntries-1)
@@ -1003,7 +1004,7 @@ int main()
 
 	for (int i = 0; i<4; ++i)
 	{
-		if ((windowsInitialised>>currentWindow)&1)
+		if ((windowsInitialised>>i)&1)
 		{
 			free(pwdarr[i]);
 			if (backpwdarr[i]) free(backpwdarr[i]);

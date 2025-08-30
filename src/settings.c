@@ -374,7 +374,7 @@ struct config_s drawSettings()
 						{
 							dehighlightSetting(currLine, settings[currLine]); 
 							++currLine;
-							highlightSetting(currLine, settings[currLine+1]);
+							highlightSetting(currLine, settings[currLine]);
 							break;
 						}
 					}
@@ -391,7 +391,7 @@ struct config_s drawSettings()
 						{
 							dehighlightSetting(currLine, sortingmethods[config->dataArr[16].value.str[0]-48]);
 							currLine-=2;
-							highlightSetting(currLine, settings[currLine-1]); 
+							highlightSetting(currLine, settings[currLine]); 
 							break;
 						}
 						case 18:
