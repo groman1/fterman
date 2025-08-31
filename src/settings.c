@@ -97,6 +97,41 @@ void option_tToStr(option_t keybind, char *dest)
 	}
 }
 
+// Gets a name for key *keycode*
+char *getKeyName(uint8_t keycode)
+{
+	char *ret = malloc(4);
+	switch (keycode)
+	{
+		case 32 ... 126: 
+		{ ret[0] = keycode; ret[1] = 0; break; }
+		case 1 ... 26:
+		{ strcpy(ret, "c-"); ret[2] = keycode+96; ret[3] = 0; break; }
+		case 170 ... 181:
+		{ ret[0] = 'f'; option_tToStr(keycode-169, &ret[1]); break; } // f's
+		case 182:
+		{ strcpy(ret, "ins"); break; }
+		case 183:
+		{ strcpy(ret, "del"); break; }
+		case 185:
+		{ strcpy(ret, "end"); break; }
+		case 186:
+		{ strcpy(ret, "pgU"); break; }
+		case 187:
+		{ strcpy(ret, "pgD"); break; }
+		case 188:
+		{ strcpy(ret, "up"); break; }
+		case 189:
+		{ strcpy(ret, "dn"); break; }
+		case 190:
+		{ ret[0] = 'r'; ret[1] = 0; break; }
+		case 191:
+		{ ret[0] = 'l'; ret[1] = 0; break; }
+		default: break;
+	}
+	return ret;
+}
+
 // Converts *string* to option_t and return it as return value
 option_t strTooption_t(char *string)
 {
@@ -123,6 +158,13 @@ void highlightSetting(int offset, char *setting)
 	wrattr(REVERSE);
 	moveprint(1+offset, 0, setting);
 	wrattr(NORMAL);
+	if (offset<17)
+	{
+		print(" : ");
+		char *keycode = getKeyName(strTooption_t(config->dataArr[offset].value.str));
+		print(keycode);
+		free(keycode);
+	}
 }
 
 // Draws color example with attribute NORMAL and colorpair specified
@@ -165,6 +207,7 @@ int findkeybind(uint8_t keybind, uint8_t id)
 {
 	char keybind_s[3];
 	option_tToStr(keybind, (char*)keybind_s);
+	if (keybind>='1'&&keybind<='4') return 1;
 	for (int i = 0; i<16; ++i)
 	{
 		if (i==id) continue;
@@ -258,14 +301,22 @@ struct config_s drawSettings()
 	uint8_t currLine = 0, currentrytype = 0;
 	clear();
 	moveprint(0,0, "Keybinds			(press q to exit)\n");
-	char *settings[20] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method", "", "", "" };
+	char *settings[] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Sorting method"};
 	char *sortingmethods[] = { "< Alphabetic (A-Z) >", "< Alphabetic (Z-A) >", "< Size (low to high) >", "< Size (high to low) >", "< Last accessed (old to new) >", "< Last accessed (new to old) >", "< Last modified (old to new) >", "< Last modified (new to old) >" };
 	char *sizestatetext[] = { "Hide size", "Show size" };
 	char *searchtext[] = { "Use static search", "Use dynamic search" };
 	char *entrytypes[] = { "< Directory >", "< Symlink >", "< Broken symlink >" };
 	char *colortext[] = { "< Foreground color >", "< Background color >" };
 
-	for (int i = 0; i<17; ++i) moveprint(1+i, 0, settings[i]);
+	for (int i = 0; i<16; ++i)
+	{ 
+		moveprint(1+i, 0, settings[i]); 
+		print(" : "); 
+		char *keycode = getKeyName(strTooption_t(config->dataArr[i].value.str));
+		print(keycode);
+		free(keycode);
+	}
+	moveprint(17, 0, settings[16]);
 	moveprint(18, 0, sortingmethods[config->dataArr[16].value.str[0]-48]);
 	moveprint(19, 0, sizestatetext[config->dataArr[17].value.str[0]-48]);
 	moveprint(20, 0, searchtext[config->dataArr[18].value.str[0]-48]);
