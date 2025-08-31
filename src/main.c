@@ -950,6 +950,7 @@ int main()
 			{
 				move(1,0);
 				cleartobot();
+				regenerateentries;
 				redrawentries;
 			}
 		}
@@ -961,6 +962,7 @@ int main()
 			filter[0] = 0;
 			clear();
 			drawPath();
+			regenerateentries;
 			redrawentries;
 		}
 		else if (keypressed>='1'&&keypressed<='4')
