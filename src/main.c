@@ -503,17 +503,19 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 			command[size] = editor[size];
 		}
 		command[size++] = ' ';
-		command = realloc(command, size+1+pwdlen);
+		command = realloc(command, size+2+pwdlen);
+		command[size++] = '"';
 		for (currSize = 0; pwd[currSize]; ++currSize)
 		{
 			command[size+currSize] = pwd[currSize];
 		}
 		size += currSize;
-		command = realloc(command, size+1+strlen(entries[*entryID].name));
+		command = realloc(command, size+3+strlen(entries[*entryID].name));
 		for (currSize = 0; entries[*entryID].name[currSize]; ++currSize)
 		{
 			command[size+currSize] = entries[*entryID].name[currSize];
 		}
+		command[currSize+size++] = '"';
 		command[size+currSize] = 0;
 		deinit();
 		system(command);
