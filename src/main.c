@@ -324,7 +324,7 @@ int dirfilter(const struct dirent *entry)
 	char *fullpath;
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
-	lstat(fullpath, &entrydata);
+	stat(fullpath, &entrydata);
 	free(fullpath);
 	if (S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
@@ -337,7 +337,7 @@ int filefilter(const struct dirent *entry)
 	char *fullpath;
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
-	lstat(fullpath, &entrydata);
+	stat(fullpath, &entrydata);
 	free(fullpath);
 	if (!S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
