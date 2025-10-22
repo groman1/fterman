@@ -106,27 +106,27 @@ char *getKeyName(uint8_t keycode)
 		case 32 ... 126: 
 		{ ret[0] = keycode; ret[1] = 0; break; }
 		case 1 ... 26:
-		{ strcpy(ret, "c-"); ret[2] = keycode+96; ret[3] = 0; break; }
+		{ strcpy(ret, "C-"); ret[2] = keycode+96; ret[3] = 0; break; }
 		case 170 ... 181:
 		{ ret[0] = 'f'; option_tToStr(keycode-169, &ret[1]); break; } // f's
 		case 182:
-		{ strcpy(ret, "ins"); break; }
+		{ strcpy(ret, "Ins"); break; }
 		case 183:
-		{ strcpy(ret, "del"); break; }
+		{ strcpy(ret, "Del"); break; }
 		case 185:
-		{ strcpy(ret, "end"); break; }
+		{ strcpy(ret, "End"); break; }
 		case 186:
-		{ strcpy(ret, "pgU"); break; }
+		{ strcpy(ret, "PgU"); break; }
 		case 187:
-		{ strcpy(ret, "pgD"); break; }
+		{ strcpy(ret, "PgD"); break; }
 		case 188:
-		{ strcpy(ret, "up"); break; }
+		{ strcpy(ret, "Up"); break; }
 		case 189:
-		{ strcpy(ret, "dn"); break; }
+		{ strcpy(ret, "Dn"); break; }
 		case 190:
-		{ ret[0] = 'r'; ret[1] = 0; break; }
+		{ strcpy(ret, "ARr"); break; }
 		case 191:
-		{ ret[0] = 'l'; ret[1] = 0; break; }
+		{ strcpy(ret, "ARl"); break; }
 		default: break;
 	}
 	return ret;
