@@ -1,4 +1,3 @@
-#include "rawtui.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -7,6 +6,8 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#include "rawtui.h"
 #include "settings.h"
 
 #define pwd pwdarr[currentWindow]
@@ -23,6 +24,8 @@
 #define SIZEGROUP 1
 #define ACCESSEDTIMEGROUP 2
 #define MODIFIEDTIMEGROUP 3
+
+#define UNUSED -1
 
 #define regenerateentries\
 				if (qtyEntries) freeFileList(entries, qtyEntries);\
@@ -117,33 +120,38 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 			isasymlink = 0;
 		}
 	}
+
+	if (currIndex>=0) clearline();
+
 	if (i+fileSizeLen+1>=maxx)
 	{
 		print("..");
 		i -= maxx-fileSizeLen-4;
 	}
 	else i = 0;
+
 	print(&name[i]);
 	i = strlen(name);
+
 	if (i+fileSizeLen+1<maxx)
 	{
 		if (isasymlink)
 		{
 			if (i+fileSizeLen+1+strlen(linkpath)<maxx)
 			{
-				moveprint(1+offset, i, "->");
+				moveprint(1+offset, i, " => ");
 				moveprint(1+offset, i+2, linkpath);
 			}
 		}
 		wrattr(NORMAL);
-		if (currIndex) moveprint(1+offset, i, " ");
-		move(1+offset, currIndex+1);
+		move(1+offset, currIndex);
 	}
 	else
 	{
 		move(1+offset, maxx-(i-currIndex)-fileSizeLen-1);
 		wrattr(NORMAL);
 	}
+
 	if (isasymlink) free(linkpath);
 }
 
@@ -165,7 +173,7 @@ void deHighlightEntry(entry_t entry, int offset)
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrattr(NORMAL|COLORPAIR(colorpair));
-	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -181,7 +189,7 @@ void highlightEntry(entry_t entry, int offset)
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrattr(REVERSE|COLORPAIR(colorpair));
-	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -413,7 +421,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		else currPair = REGFILECOLOR;
 		clearline();
 		wrattr(COLORPAIR(currPair));
-		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, 0, currPair==SYMLINKCOLOR);
+		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, UNUSED, currPair==SYMLINKCOLOR);
 		if (currPair<=EXECCOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
@@ -552,30 +560,77 @@ void editfname(entry_t *entry, int offset)
 {
 	char *oldname = malloc(strlen(entry->name)+1);
 	strcpy(oldname, entry->name);
-	int ch, currIndex = strlen(entry->name)-1, filenameLen = currIndex+1;
-	
+	int ch, currIndex = strlen(entry->name), filenameLen = currIndex;
+
+	uint8_t colorpair;
+	if (S_ISDIR(entry->data.st_mode)) colorpair = DIRECTORYCOLOR;
+	else if (S_ISLNK(entry->data.st_mode)) colorpair = SYMLINKCOLOR;
+	else if (S_IXUSR&entry->data.st_mode) colorpair = EXECCOLOR;
+	else colorpair = REGFILECOLOR;
+
 	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = strlen(oldname)+1;
 	
 	setcursor(1);
 	move(offset+1, 0);
 	clearline();
+	wrattr(NORMAL|COLORPAIR(colorpair));
 	printName(entry->name, currFileSizeLen, offset, currIndex, 0);
 	while((ch=inesc())&&ch!=10&&ch!=13)
 	{
 		switch(ch)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
-			{	if (filenameLen<255) {entry->name = realloc(entry->name, filenameLen+2); if (filenameLen!=currIndex+1) { strPushfwd(entry->name, currIndex+1, filenameLen); }  ++filenameLen; entry->name[++currIndex] = ch; if (filenameLen==currIndex+1) { entry->name[currIndex+1] = 0; } } break;	}
+			{
+				if (filenameLen<255)
+				{
+					entry->name = realloc(entry->name, filenameLen+2);
+					if (filenameLen!=currIndex) strPushfwd(entry->name, currIndex, filenameLen);
+					++filenameLen;
+					entry->name[currIndex++] = ch;
+					if (filenameLen==currIndex) entry->name[currIndex] = 0;
+				}
+				break;
+			}
 			case 127:
-			{	if (currIndex+1) {  strPushback(entry->name, currIndex--); if (!currIndex) { currIndex = 0; } entry->name = realloc(entry->name, filenameLen--); } break;	}
+			{
+				if (currIndex)
+				{
+					strPushback(entry->name, --currIndex);
+					entry->name = realloc(entry->name, filenameLen--);
+				}
+				break;
+			}
+			case 183:
+			{
+				if (currIndex!=filenameLen)
+				{
+					strPushback(entry->name, currIndex);
+					entry->name = realloc(entry->name, filenameLen--);
+				}
+				break;
+			}
 			case 3:
-			{	wrattr(NORMAL); entry->name = realloc(entry->name, initialFileStrLen); strcpy(entry->name, oldname); setcursor(0); free(oldname); return;	}
+			{
+				wrattr(NORMAL);
+				entry->name = realloc(entry->name, initialFileStrLen);
+				strcpy(entry->name, oldname);
+				setcursor(0);
+				free(oldname);
+				return;
+			}
 			case 191:
-			{	if (currIndex+1) {--currIndex; } break;	}
+			{
+				if (currIndex) --currIndex;
+				break;
+			}
 			case 190: 
-			{	if (currIndex<filenameLen-1) { ++currIndex; } break; }
+			{
+				if (currIndex<filenameLen) ++currIndex;
+				break;
+			}
 			default: break;
 		}
+		wrattr(NORMAL|COLORPAIR(colorpair));
 		printName(entry->name, currFileSizeLen, offset, currIndex, 0);
 	}
 
