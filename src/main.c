@@ -209,20 +209,15 @@ void loadsavedPWD()
 	strcpy(pwd, savedpwd);
 }
 
-// Copies (*keepoldFile* = 1) or cuts (*keepoldFile = 0) the file from *filecppwd* to *pwd*
+// Copies (*keepoldFile* = 1) or cuts (*keepoldFile* = 0) the file from *filecppwd* to *pwd*
 void copycutFile(int keepoldFile)
 {
-	char *command = malloc(10+keepoldFile*3+strlen(filecppwd)+strlen(pwd)); // 9 = 3 (cp or mv) + 1 ( ) + 1 (/ for second fname) + 4 for quotes
-	char cp[] = "cp -r \"";
-	char mv[] = "mv \"";
-	if (keepoldFile) strcpy(command, cp);
-	else strcpy(command, mv);
-	strcat(command, filecppwd);
-	strcat(command, "\" \"");
-	strcat(command, pwd);
-	strcat(command, "/\"");
-	system(command);
-	free(command);
+	pid_t pid = fork();
+
+	if (keepoldFile&&pid==0) exit(execlp("cp", "cp", "-r", filecppwd, pwd, (char*)0));
+	else if (!keepoldFile&&pid==0) exit(execlp("mv", "mv", filecppwd, pwd, (char*)0));
+
+	while(wait(0)!=-1);
 }
 
 // Draws the top-right status line (current entry, offset, etc)
@@ -507,7 +502,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 			exit(execl(fullpath, fullpath, (char*)0));
 		}
 		free(fullpath);
-		while(wait(NULL)!=-1);
+		while(wait(0)!=-1);
 		init();
 		setcursor(0);
 		clear();
@@ -527,7 +522,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 
 		if (pid==0) exit(execlp(editor, editor, args, (char*)0));
 		free(args);
-		while(wait(NULL)!=-1);
+		while(wait(0)!=-1);
 		init();
 		setcursor(0);
 		clear();
@@ -542,23 +537,14 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 // Deletes a file at *pwd* + *file*
 void deleteFile(char *file)
 {
-	char *command = malloc(8+pwdlen+strlen(file));
-	char initial[] = "rm -rf ";
-	for (int i = 0; initial[i]; ++i)
+	char *fullpath = strccat(pwd, file);
+	pid_t pid = fork();
+	if (pid==0)
 	{
-		command[i] = initial[i];
+		exit(execlp("rm", "rm", "-rf", fullpath, (char*)0));
 	}
-	for (int i = 0; pwd[i]; ++i)
-	{
-		command[7+i] = pwd[i];
-	}
-	for (int i = 0; file[i]; ++i)
-	{
-		command[7+pwdlen+i] = file[i];
-	}
-	command[7+pwdlen+strlen(file)] = 0;
-	system(command);
-	free(command);
+	while(wait(0)!=-1);
+	free(fullpath);
 }
 
 // Calls the function to edit the filename on line *offset*+1
@@ -593,38 +579,19 @@ void editfname(entry_t *entry, int offset)
 		printName(entry->name, currFileSizeLen, offset, currIndex, 0);
 	}
 
-	char *command = malloc(10+2*pwdlen+strlen(oldname)+strlen(entry->name)); // "mv "(3 bytes) + " + pwd + old filename + " + " " (1 byte) + " + pwd + new filename + ". As pwdlen includes the null terminator, subtract 2, but add 1 for null terminator
-	char mv[] = "mv \"";
-	for (int i = 0; mv[i]; ++i)
-	{
-		command[i] = mv[i];
-	}
-	for (int i = 0; pwd[i]; ++i)
-	{
-		command[4+i] = pwd[i];
-	}
-	for (int i = 0; oldname[i]; ++i)
-	{
-		command[4+pwdlen+i] = oldname[i];
-	}
-	command[4+pwdlen+strlen(oldname)] = '"';
-	command[5+pwdlen+strlen(oldname)] = ' ';
-	command[6+pwdlen+strlen(oldname)] = '"';
-	for (int i = 0; pwd[i]; ++i)
-	{
-		command[7+pwdlen+strlen(oldname)+i] = pwd[i];
-	}
-	for (int i = 0; entry->name[i]; ++i)
-	{
-		command[7+2*pwdlen+strlen(oldname)+i] = entry->name[i];
-	}
-	command[7+2*pwdlen+strlen(oldname)+strlen(entry->name)] = '"';
-	command[8+2*pwdlen+strlen(oldname)+strlen(entry->name)] = 0;
-	system(command);
+	char *oldpath = strccat(pwd, oldname);
+	char *newpath = strccat(pwd, entry->name);
+
+	pid_t pid = fork();
+	if (pid==0) exit(execlp("mv", "mv", oldpath, newpath, (char*)0));
+
+	while(wait(0)!=-1);
 
 	setcursor(0);
+
 	free(oldname);
-	free(command);
+	free(oldpath);
+	free(newpath);
 }
 
 // Attempts to find entry with name *entryname* in *entries* with length *qtyEntries*
