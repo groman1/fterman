@@ -1,5 +1,5 @@
 OBJECTFILES := src/main.o src/settings.o src/xmltools.o src/rawtui.o
-CFLAGS := -Wall -Wextra -Werror -Wno-error=unused-but-set-parameter
+CFLAGS := -Wall -Wextra -Werror -Wno-unused-but-set-parameter
 RM := rm -f
 INSTALL := install
 

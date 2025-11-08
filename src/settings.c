@@ -23,6 +23,8 @@ const char *defaultconfigstring = "<option for=\"goUp\">188</option>\n\
 <option for=\"sortingmethod\">0</option>\n\
 <option for=\"showsize\">1</option>\n\
 <option for=\"searchtype\">1</option>\n\
+<option for=\"regfilecolor\">70</option>\n\
+<option for=\"executablecolor\">20</option>\n\
 <option for=\"directorycolor\">40</option>\n\
 <option for=\"symlinkcolor\">60</option>\n\
 <option for=\"brokensymlinkcolor\">10</option>";
@@ -147,7 +149,7 @@ option_t strTooption_t(char *string)
 // Rewrites the current string *setting* with color pair 4 enabled at line *offset*
 void bindSetting(int offset, char *setting)
 {
-	wrattr(NORMAL|COLORPAIR(4));
+	wrattr(NORMAL|COLORPAIR(7));
 	moveprint(1+offset, 0, setting);
 	wrattr(NORMAL);
 }
@@ -242,7 +244,7 @@ createconfig:
 	confstring[i] = 0;
 
 	config = parseXML(confstring);
-	if (config==(void*)0x10||config->tagQty!=22) // 0 length file or outdated config
+	if (config==(void*)0x10||config->tagQty!=24) // 0 length file or outdated config
 	{
 		fclose(configFile);
 		goto createconfig;
@@ -269,6 +271,8 @@ createconfig:
 	updatecolorpair(1);
 	updatecolorpair(2);
 	updatecolorpair(3);
+	updatecolorpair(4);
+	updatecolorpair(5);
 	free(confstring);
 	free(configPath);
 	fclose(configFile);
@@ -290,10 +294,7 @@ void saveConfig()
 }
 
 // Frees config structure
-void freeConfig()
-{
-	freeXML(config);
-}
+void freeConfig() { freeXML(config); }
 
 // Draws the main settings menu, returns the updated config
 struct config_s drawSettings()
@@ -305,13 +306,13 @@ struct config_s drawSettings()
 	char *sortingmethods[] = { "< Alphabetic (A-Z) >", "< Alphabetic (Z-A) >", "< Size (low to high) >", "< Size (high to low) >", "< Last accessed (old to new) >", "< Last accessed (new to old) >", "< Last modified (old to new) >", "< Last modified (new to old) >" };
 	char *sizestatetext[] = { "Hide size", "Show size" };
 	char *searchtext[] = { "Use static search", "Use dynamic search" };
-	char *entrytypes[] = { "< Directory >", "< Symlink >", "< Broken symlink >" };
+	char *entrytypes[] = { "< Regular file >", "< Executable >", "< Directory >", "< Symlink >", "< Broken symlink >" };
 	char *colortext[] = { "< Foreground color >", "< Background color >" };
 
 	for (int i = 0; i<16; ++i)
 	{ 
-		moveprint(1+i, 0, settings[i]); 
-		print(" : "); 
+		moveprint(1+i, 0, settings[i]);
+		print(" : ");
 		char *keycode = getKeyName(strTooption_t(config->dataArr[i].value.str));
 		print(keycode);
 		free(keycode);
@@ -341,12 +342,12 @@ struct config_s drawSettings()
 				}
 				else if (currLine==18)
 				{
-					config->dataArr[17].value.str[0] += config->dataArr[17].value.str[0]==48?1:-1;
+					config->dataArr[17].value.str[0] = !(config->dataArr[17].value.str[0]!=48)+48;
 					highlightSetting(18, sizestatetext[config->dataArr[17].value.str[0]-48]);
 				}
 				else if (currLine==19)
 				{
-					config->dataArr[18].value.str[0] += config->dataArr[18].value.str[0]==48?1:-1;
+					config->dataArr[18].value.str[0] = !(config->dataArr[18].value.str[0]!=48)+48;
 					highlightSetting(19, searchtext[config->dataArr[18].value.str[0]-48]);
 				}
 				break;	
@@ -355,7 +356,7 @@ struct config_s drawSettings()
 			{
 				switch (currLine)
 				{
-					case 17:
+					case 17: // sorting methods
 					{
 						if (config->dataArr[16].value.str[0]==55) config->dataArr[16].value.str[0] = 47;
 						++config->dataArr[16].value.str[0];
@@ -363,9 +364,9 @@ struct config_s drawSettings()
 						highlightSetting(17, sortingmethods[config->dataArr[16].value.str[0]-48]);
 						break;
 					}
-					case 20:
+					case 20: // entry types for colors
 					{
-						if (currentrytype==2) currentrytype = -1;
+						if (currentrytype==4) currentrytype = -1;
 						++currentrytype;
 						clearSettingLine(20);
 						highlightColorOption(entrytypes[currentrytype], currentrytype+1);
@@ -373,7 +374,7 @@ struct config_s drawSettings()
 					}
 					case 21:
 					{
-						if (config->dataArr[19+currentrytype].value.str[0]==55) config->dataArr[19+currentrytype].value.str[0] = 47;
+						config->dataArr[19+currentrytype].value.str[0] -= 8*(config->dataArr[19+currentrytype].value.str[0]==55);
 						++config->dataArr[19+currentrytype].value.str[0];
 						updatecolorpair(currentrytype+1);
 						clearSettingLine(20);
@@ -382,7 +383,7 @@ struct config_s drawSettings()
 					}
 					case 22:
 					{
-						if (config->dataArr[19+currentrytype].value.str[1]==55) config->dataArr[19+currentrytype].value.str[1] = 47;
+						config->dataArr[19+currentrytype].value.str[1] -= 8*(config->dataArr[19+currentrytype].value.str[1]==55);
 						++config->dataArr[19+currentrytype].value.str[1];
 						updatecolorpair(currentrytype+1);
 						clearSettingLine(20);
@@ -406,7 +407,7 @@ struct config_s drawSettings()
 					}
 					case 20:
 					{
-						if (currentrytype==0) currentrytype = 3;
+						if (currentrytype==0) currentrytype = 5;
 						--currentrytype;
 						clearSettingLine(20);
 						highlightColorOption(entrytypes[currentrytype], currentrytype+1);

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "settings.h"
 
@@ -12,10 +13,11 @@
 #define filter filterarr[currentWindow]
 #define pwdlen pwdlenarr[currentWindow]
 
-#define REGFILECOLOR 0
-#define DIRECTORYCOLOR 1
-#define SYMLINKCOLOR 2
-#define BROKENSYMLINKCOLOR 3
+#define REGFILECOLOR 1
+#define EXECCOLOR 2
+#define DIRECTORYCOLOR 3
+#define SYMLINKCOLOR 4
+#define BROKENSYMLINKCOLOR 5
 
 #define ALPHABETICGROUP 0
 #define SIZEGROUP 1
@@ -159,11 +161,12 @@ void deHighlightEntry(entry_t entry, int offset)
 	uint8_t colorpair;
 	if (S_ISDIR(entry.data.st_mode)) colorpair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry.data.st_mode)) colorpair = SYMLINKCOLOR;
+	else if (S_IXUSR&entry.data.st_mode) colorpair = EXECCOLOR;
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrattr(NORMAL|COLORPAIR(colorpair));
 	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR);
-	if (colorpair==REGFILECOLOR&&showsize) printFileSize(entry.data.st_size, offset);
+	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
 
@@ -174,11 +177,12 @@ void highlightEntry(entry_t entry, int offset)
 	uint8_t colorpair;
 	if (S_ISDIR(entry.data.st_mode)) colorpair = DIRECTORYCOLOR;
 	else if (S_ISLNK(entry.data.st_mode)) colorpair = SYMLINKCOLOR;
+	else if (S_IXUSR&entry.data.st_mode) colorpair = EXECCOLOR;
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrattr(REVERSE|COLORPAIR(colorpair));
 	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR);
-	if (colorpair==REGFILECOLOR&&showsize) printFileSize(entry.data.st_size, offset);
+	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
 
@@ -410,11 +414,12 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 	{
 		if (S_ISDIR(entries[i].data.st_mode)) currPair = DIRECTORYCOLOR;
 		else if (S_ISLNK(entries[i].data.st_mode)) currPair = SYMLINKCOLOR;
+		else if (S_IXUSR&entries[i].data.st_mode) currPair = EXECCOLOR;
 		else currPair = REGFILECOLOR;
 		clearline();
 		wrattr(COLORPAIR(currPair));
 		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, 0, currPair==SYMLINKCOLOR);
-		if (currPair==REGFILECOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
+		if (currPair<=EXECCOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
 	wrattr(NORMAL);
@@ -491,35 +496,38 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		*entryID = 0;
 		*offset = 0;
 	}
+	else if (tempstat.st_mode&S_IXUSR)
+	{
+		char *fullpath = strccat(pwd, entries[*entryID].name);
+		deinit();
+		pid_t pid = fork();
+
+		if (pid==0)
+		{
+			exit(execl(fullpath, fullpath, (char*)0));
+		}
+		free(fullpath);
+		while(wait(NULL)!=-1);
+		init();
+		setcursor(0);
+		clear();
+		drawPath();
+		drawEntryCount(*offset, *entryID, *qtyEntries);
+		drawObjects(entries, *offset, *qtyEntries);
+		highlightEntry(entries[*entryID], *entryID-*offset);
+	}
 	else
 	{
 		char *editor = getenv("EDITOR");
 		if (!editor) return entries; // EDITOR environment variable has to be set in order for this to work
-		char *command = "";
-		int size, currSize;
-		command = malloc(strlen(editor)+1);
-		for (size = 0; editor[size]; ++size)
-		{
-			command[size] = editor[size];
-		}
-		command[size++] = ' ';
-		command = realloc(command, size+2+pwdlen);
-		command[size++] = '"';
-		for (currSize = 0; pwd[currSize]; ++currSize)
-		{
-			command[size+currSize] = pwd[currSize];
-		}
-		size += currSize;
-		command = realloc(command, size+3+strlen(entries[*entryID].name));
-		for (currSize = 0; entries[*entryID].name[currSize]; ++currSize)
-		{
-			command[size+currSize] = entries[*entryID].name[currSize];
-		}
-		command[currSize+size++] = '"';
-		command[size+currSize] = 0;
 		deinit();
-		system(command);
-		free(command);
+		char *args = strccat(pwd, entries[*entryID].name);
+		deinit();
+		pid_t pid = fork();
+
+		if (pid==0) exit(execlp(editor, editor, args, (char*)0));
+		free(args);
+		while(wait(NULL)!=-1);
 		init();
 		setcursor(0);
 		clear();
@@ -721,7 +729,7 @@ int main()
 	searchtype = config.searchtype;
 	setSortingFunction();
 
-	initcolorpair(4, BLACK, GREEN);
+	initcolorpair(7, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
 
 	if (maxx<40||maxy<25)
