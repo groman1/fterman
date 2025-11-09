@@ -137,10 +137,10 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 	{
 		if (isasymlink)
 		{
-			if (i+fileSizeLen+1+strlen(linkpath)<maxx)
+			if (i+fileSizeLen+4+strlen(linkpath)<maxx)
 			{
 				moveprint(1+offset, i, " => ");
-				moveprint(1+offset, i+2, linkpath);
+				moveprint(1+offset, i+4, linkpath);
 			}
 		}
 		wrattr(NORMAL);
