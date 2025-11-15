@@ -16,6 +16,8 @@ Ctrl+X: cut a file\
 Ctrl+V: paste a copied or cut file\
 /: search\
 ?: show all entries (cancel search)\
+f: create a new file\
+d: create a new directory\
 1-4: switch between workspaces
 # Features
 - Fast sorting with 4 options available (by size, last modified/accessed time and alphabetically)
@@ -25,7 +27,7 @@ Ctrl+V: paste a copied or cut file\
 - Built-in settings menu with:
 - - Customizable keybinds (all default keybinds except for workspace keys)
 - - Useful options (show/hide file size, use dynamic/static search)
-- - Customizable colors for directories and symlinks
+- - Customizable colors for all types of entries
 - Symlink destinations are shown next to the symlinks
 - Broken symlinks have their own color
 # Notes

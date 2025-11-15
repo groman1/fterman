@@ -6,11 +6,13 @@
 
 #define colorpair_t uint8_t
 #define attr_t uint8_t
-#define NORMAL 1
-#define BOLD 1<<1
-#define FAINT 1<<2
-#define BLINK 1<<3
-#define REVERSE 1<<4
+
+#define NORMAL 0
+#define BOLD 1<<0
+#define FAINT 1<<1
+#define BLINK 1<<2
+#define REVERSE 1<<3
+#define UNDERLINE 1<<4
 
 #define BLACK 0
 #define	RED 1
@@ -22,11 +24,11 @@
 #define WHITE 7
 
 struct termios originalterminal;
-colorpair_t pairs[8];
+colorpair_t pairs[256];
 
 void initcolorpair(uint8_t id, uint8_t foreground, uint8_t background)
 {
-	if (id<8) pairs[id] = foreground<<4|background;
+	pairs[id] = foreground<<4|background;
 }
 
 void init()
@@ -158,19 +160,28 @@ void loadCursorPos()
 	write(STDOUT_FILENO, "\x1b[u", 3);
 }
 
+void wrcolorpair(colorpair_t colorpair)
+{
+	char colorstring[8] = "\x1b[39;49m";
+	if (colorpair)
+	{
+		colorstring[3] = (pairs[colorpair]>>4)+48;
+		if (pairs[colorpair]%16) colorstring[6] = (pairs[colorpair]%16)+48;
+	}
+	write(STDOUT_FILENO, colorstring, 8);
+}
+
 void wrattr(attr_t attr)
 {
-	if (attr&NORMAL) write(STDOUT_FILENO, "\x1b[0m", 4);
 	if (attr&BOLD) write(STDOUT_FILENO, "\x1b[1m", 4);
 	if (attr&FAINT) write(STDOUT_FILENO, "\x1b[2m", 4);
 	if (attr&REVERSE) write(STDOUT_FILENO, "\x1b[7m", 4);
-	char colorstring[8] = "\x1b[39;49m";
-	if (attr>>5)
+	if (attr&UNDERLINE) write(STDOUT_FILENO, "\x1b[4m", 4);
+	if (attr==NORMAL)
 	{
-		colorstring[3] = (pairs[attr>>5]>>4)+48;
-		if (pairs[attr>>5]%16) colorstring[6] = (pairs[attr>>5]%16)+48;
+		write(STDOUT_FILENO, "\x1b[0m", 4);
+		wrcolorpair(0);
 	}
-	write(STDOUT_FILENO, colorstring, 8);
 }
 
 void clear()

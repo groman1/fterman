@@ -21,6 +21,8 @@ struct option_s
 	option_t paste;
 	option_t search;
 	option_t cancelsearch;
+	option_t createfile;
+	option_t createdir;
 	option_t sortingmethod;
 	option_t showsize;
 	option_t searchtype;

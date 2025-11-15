@@ -103,9 +103,9 @@ void strPushfwd(char *string, int startingIndex, int stringLen) // assume string
 }
 
 // Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
-void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t isasymlink)
+void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t isasymlink, uint8_t prefixlen)
 {
-	move(1+offset, 0);
+	move(1+offset, prefixlen);
 	int i = strlen(name);
 	char *linkpath;
 	if (!showsize) fileSizeLen = 0;
@@ -116,12 +116,10 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 		free(fullpath);
 		if (linkpath==NULL)
 		{
-			wrattr(COLORPAIR(BROKENSYMLINKCOLOR));
+			wrcolorpair(BROKENSYMLINKCOLOR);
 			isasymlink = 0;
 		}
 	}
-
-	if (currIndex>=0) clearline();
 
 	if (i+fileSizeLen+1>=maxx)
 	{
@@ -137,14 +135,14 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 	{
 		if (isasymlink)
 		{
-			if (i+fileSizeLen+4+strlen(linkpath)<maxx)
+			if (i+fileSizeLen+4+strlen(linkpath)+prefixlen<maxx)
 			{
-				moveprint(1+offset, i, " => ");
-				moveprint(1+offset, i+4, linkpath);
+				moveprint(1+offset, i+prefixlen, " => ");
+				moveprint(1+offset, i+prefixlen+4, linkpath);
 			}
 		}
 		wrattr(NORMAL);
-		move(1+offset, currIndex);
+		move(1+offset, currIndex+prefixlen);
 	}
 	else
 	{
@@ -172,8 +170,8 @@ void deHighlightEntry(entry_t entry, int offset)
 	else if (S_IXUSR&entry.data.st_mode) colorpair = EXECCOLOR;
 	else colorpair = REGFILECOLOR;
 	clearline();
-	wrattr(NORMAL|COLORPAIR(colorpair));
-	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR);
+	wrcolorpair(colorpair);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR, 0);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -188,8 +186,9 @@ void highlightEntry(entry_t entry, int offset)
 	else if (S_IXUSR&entry.data.st_mode) colorpair = EXECCOLOR;
 	else colorpair = REGFILECOLOR;
 	clearline();
-	wrattr(REVERSE|COLORPAIR(colorpair));
-	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR);
+	wrattr(REVERSE);
+	wrcolorpair(colorpair);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR, 0);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -243,7 +242,7 @@ void drawPath()
 {
 	move(0,0);
 	clearline();
-	if (pwdlen<maxx) dprintf(STDOUT_FILENO, "%s ", pwd);
+	if (pwdlen<maxx) print(pwd);
 	else 
 	{
 		printsize(pwd, maxx-2);
@@ -420,8 +419,8 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		else if (S_IXUSR&entries[i].data.st_mode) currPair = EXECCOLOR;
 		else currPair = REGFILECOLOR;
 		clearline();
-		wrattr(COLORPAIR(currPair));
-		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, UNUSED, currPair==SYMLINKCOLOR);
+		wrcolorpair(currPair);
+		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, UNUSED, currPair==SYMLINKCOLOR, 0);
 		if (currPair<=EXECCOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
@@ -555,39 +554,50 @@ void deleteFile(char *file)
 	free(fullpath);
 }
 
-// Calls the function to edit the filename on line *offset*+1
-void editfname(entry_t *entry, int offset)
+// Provides inline text editing with inline right/left movement for functions *editfname* and *createEntry*
+char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t colorpair)
 {
-	char *oldname = malloc(strlen(entry->name)+1);
-	strcpy(oldname, entry->name);
-	int ch, currIndex = strlen(entry->name), filenameLen = currIndex;
+	char *text;
+	uint8_t length, currIndex, ch;
+	if (initialtext)
+	{
+		text = malloc(strlen(initialtext)+1);
+		strcpy(text, initialtext);
+		length = strlen(initialtext);
+		currIndex = length;
+	}
+	else
+	{
+		text = malloc(1);
+		length = 0;
+		currIndex = 0;
+	}
 
-	uint8_t colorpair;
-	if (S_ISDIR(entry->data.st_mode)) colorpair = DIRECTORYCOLOR;
-	else if (S_ISLNK(entry->data.st_mode)) colorpair = SYMLINKCOLOR;
-	else if (S_IXUSR&entry->data.st_mode) colorpair = EXECCOLOR;
-	else colorpair = REGFILECOLOR;
-
-	int currFileSizeLen = getIntLen(entry->data.st_size), initialFileStrLen = strlen(oldname)+1;
-	
 	setcursor(1);
-	move(offset+1, 0);
-	clearline();
-	wrattr(NORMAL|COLORPAIR(colorpair));
-	printName(entry->name, currFileSizeLen, offset, currIndex, 0);
+	move(offset+1, prefixlen);
+	cleartoeol();
+	char workspacestring[2] = "W";
+	workspacestring[1] = currentWindow+49;
+
+	saveCursorPos();
+	moveprintsize(maxy, maxx-2, workspacestring, 2);
+	loadCursorPos();
+	wrcolorpair(colorpair);
+	if (initialtext) printName(initialtext, 0, offset, currIndex, 0, prefixlen);
+
 	while((ch=inesc())&&ch!=10&&ch!=13)
 	{
 		switch(ch)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
 			{
-				if (filenameLen<255)
+				if (length<255)
 				{
-					entry->name = realloc(entry->name, filenameLen+2);
-					if (filenameLen!=currIndex) strPushfwd(entry->name, currIndex, filenameLen);
-					++filenameLen;
-					entry->name[currIndex++] = ch;
-					if (filenameLen==currIndex) entry->name[currIndex] = 0;
+					text = realloc(text, length+2);
+					if (length!=currIndex) strPushfwd(text, currIndex, length);
+					++length;
+					text[currIndex++] = ch;
+					if (length==currIndex) text[currIndex] = 0;
 				}
 				break;
 			}
@@ -595,28 +605,25 @@ void editfname(entry_t *entry, int offset)
 			{
 				if (currIndex)
 				{
-					strPushback(entry->name, --currIndex);
-					entry->name = realloc(entry->name, filenameLen--);
+					strPushback(text, --currIndex);
+					text = realloc(text, length--);
 				}
 				break;
 			}
 			case 183:
 			{
-				if (currIndex!=filenameLen)
+				if (currIndex!=length)
 				{
-					strPushback(entry->name, currIndex);
-					entry->name = realloc(entry->name, filenameLen--);
+					strPushback(text, currIndex);
+					text = realloc(text, length--);
 				}
 				break;
 			}
 			case 3:
 			{
-				wrattr(NORMAL);
-				entry->name = realloc(entry->name, initialFileStrLen);
-				strcpy(entry->name, oldname);
 				setcursor(0);
-				free(oldname);
-				return;
+				free(text);
+				return 0;
 			}
 			case 191:
 			{
@@ -625,13 +632,48 @@ void editfname(entry_t *entry, int offset)
 			}
 			case 190: 
 			{
-				if (currIndex<filenameLen) ++currIndex;
+				if (currIndex<length) ++currIndex;
 				break;
 			}
 			default: break;
 		}
-		wrattr(NORMAL|COLORPAIR(colorpair));
-		printName(entry->name, currFileSizeLen, offset, currIndex, 0);
+
+		move(offset+1, prefixlen);
+		cleartoeol();
+
+		wrattr(NORMAL);
+		saveCursorPos();
+		moveprintsize(maxy, maxx-2, workspacestring, 2);
+		loadCursorPos();
+
+		wrcolorpair(colorpair);
+		printName(text, 0, offset, currIndex, 0, prefixlen);
+	}
+	
+	setcursor(0);
+	return text;
+}
+
+// Calls the function to edit the filename on line *offset*+1
+void editfname(entry_t *entry, int offset)
+{
+	char *oldname = malloc(strlen(entry->name)+1);
+	strcpy(oldname, entry->name);
+
+	uint8_t colorpair;
+	if (S_ISDIR(entry->data.st_mode)) colorpair = DIRECTORYCOLOR;
+	else if (S_ISLNK(entry->data.st_mode)) colorpair = SYMLINKCOLOR;
+	else if (S_IXUSR&entry->data.st_mode) colorpair = EXECCOLOR;
+	else colorpair = REGFILECOLOR;
+
+	free(entry->name);
+	entry->name = inlineedit(offset, oldname, 0, colorpair);
+	if (!entry->name)
+	{
+		entry->name = malloc(strlen(oldname)+1);
+		strcpy(entry->name, oldname);
+		free(oldname);
+		return;
 	}
 
 	char *oldpath = strccat(pwd, oldname);
@@ -641,8 +683,6 @@ void editfname(entry_t *entry, int offset)
 	if (pid==0) exit(execlp("mv", "mv", oldpath, newpath, (char*)0));
 
 	while(wait(0)!=-1);
-
-	setcursor(0);
 
 	free(oldname);
 	free(oldpath);
@@ -665,6 +705,9 @@ void search(int qtyEntries)
 	entry_t *entries = getFileList(&qtyEntries);
 	uint8_t filterlen = strlen(filter), keypressed;
 	if (searchtype) drawEntryCount(0, 0, qtyEntries);
+	char workspacestring[2] = "W";
+	workspacestring[1] = currentWindow+49;
+	moveprintsize(maxy, maxx-2, workspacestring, 2);
 	moveprint(maxy, 0, ":");
 	moveprint(maxy, 1, filter);
 	qtyEntries = 0;
@@ -680,10 +723,8 @@ void search(int qtyEntries)
 					filter = realloc(filter, ++filterlen+1); 
 					filter[filterlen-1] = keypressed;
 					filter[filterlen] = 0;
-					move(maxy, 0);
-					clearline();
-					moveprint(maxy, 0, ":");
-					moveprint(maxy, 1, filter);
+					move(maxy, 1);
+					cleartoeol();
 				}
 				break;
 			}
@@ -707,6 +748,7 @@ void search(int qtyEntries)
 				return;
 			}
 		}
+
 		if (searchtype)
 		{
 			if (qtyEntries) freeFileList(entries, qtyEntries);
@@ -718,6 +760,10 @@ void search(int qtyEntries)
 			drawObjects(entries, 0, qtyEntries);
 			moveprint(maxy, 0, ":");
 			moveprint(maxy, 1, filter);
+			
+			saveCursorPos();
+			moveprintsize(maxy, maxx-2, workspacestring, 2);
+			loadCursorPos();
 			setcursor(1);
 		}
 	}
@@ -732,6 +778,52 @@ void setSortingFunction()
 	else if (sortingmethod>>1==ACCESSEDTIMEGROUP) sortingfunction = &lastaccessedsort;
 }
 
+uint8_t createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir)
+{
+	char *fname;
+
+	if (isdir)
+	{
+		moveprint(maxy, 0, "D: ");
+		fname = inlineedit(maxy-1, NULL, 2, DIRECTORYCOLOR);
+	}
+	else	
+	{
+		moveprint(maxy, 0, "F: ");
+		fname = inlineedit(maxy-1, NULL, 2, REGFILECOLOR);
+	}
+
+	if (!fname||fname[0]==0)
+	{
+		return 1;
+	}
+
+	move(maxy, 0);
+	clearline();
+
+	for (uint32_t i = 0; i<qtyEntries; ++i)
+	{
+		if (!strcmp(entries[i].name, fname))
+		{
+			moveprint(0, 0, "The file/directory with this name already exists");
+			in();
+			return 1;
+		}
+	}
+
+	pid_t pid = fork();
+	char *fullpath = strccat(pwd, fname);
+	if (pid==0)
+	{
+		if (isdir)
+			exit(execlp("mkdir", "mkdir", fullpath, (char*)0));
+		else
+			exit(execlp("touch", "touch", fullpath, (char*)0));
+	}
+
+	while(wait(0)==-1);
+	return 0;
+}
 
 // These macros will break everything if placed at the top
 #define currEntry currEntryarr[currentWindow]
@@ -761,7 +853,7 @@ int main()
 	}
 	--maxy; // to fit the search bar
 
-	uint8_t keypressed, windowsInitialised = 1, cutfromwindow = 0;
+	uint8_t keypressed, windowsInitialised = 1, windowstatus = 0, cutfromwindow = 0;
 	char *temppwd = getenv("PWD");
 	pwdlen = strlen(temppwd);
 	pwd = malloc(pwdlen+2);
@@ -964,7 +1056,7 @@ int main()
 			if (keepoldFile==0) 
 			{
 				keepoldFile = -1;
-				cutfromwindow += 4;
+				windowstatus |= 1<<cutfromwindow;
 			}
 		}
 		else if (keypressed==config.search)
@@ -997,6 +1089,24 @@ int main()
 			regenerateentries;
 			redrawentries;
 		}
+		else if (keypressed==config.createdir)
+		{
+			createEntry(entries, qtyEntries, 1);
+			clear();
+			drawPath();
+			windowstatus = 15-(1<<currentWindow);
+			regenerateentries;
+			redrawentries;
+		}
+		else if (keypressed==config.createfile)
+		{
+			createEntry(entries, qtyEntries, 0);
+			clear();
+			drawPath();
+			windowstatus = 15-(1<<currentWindow);
+			regenerateentries;
+			redrawentries;
+		}
 		else if (keypressed>='1'&&keypressed<='4')
 		{
 			uint8_t lastwindow = currentWindow;
@@ -1012,8 +1122,8 @@ int main()
 			workspacestring[1] = currentWindow+49;
 			clear();
 			drawPath();
-			if (cutfromwindow-4==currentWindow) 
-			{ regenerateentries; cutfromwindow = 0; }
+			if (windowstatus>>currentWindow&1) 
+			{ regenerateentries; windowstatus ^= 1<<currentWindow; }
 			redrawentries;
 		}
 		getTermXY(&maxy, &maxx);

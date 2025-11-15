@@ -5,11 +5,13 @@
 
 #define colorpair_t uint8_t
 #define attr_t uint8_t
-#define NORMAL 1
-#define BOLD 1<<1
-#define FAINT 1<<2
-#define BLINK 1<<3
-#define REVERSE 1<<4
+
+#define NORMAL 0
+#define BOLD 1<<0
+#define FAINT 1<<1
+#define BLINK 1<<2
+#define REVERSE 1<<3
+#define UNDERLINE 1<<4
 
 #define BLACK 0
 #define	RED 1
@@ -19,8 +21,6 @@
 #define MAGENTA 5
 #define CYAN 6
 #define WHITE 7
-
-#define COLORPAIR(color) color<<5
 
 void init();
 void initinline();
@@ -36,6 +36,7 @@ void cleartoeol();
 void saveCursorPos();
 void loadCursorPos();
 void wrattr(attr_t attr);
+void wrcolorpair(colorpair_t colorpair);
 void getTermXY(uint16_t *y, uint16_t *x);
 void getCursorPos(uint16_t *y, uint16_t *x);
 void clearline();
