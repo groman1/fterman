@@ -919,7 +919,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 #define entries entriesarr[currentWindow]
 
 
-int main()
+int main(int argc, char **argv)
 {
 	struct option_s config = loadConfig();
 
@@ -928,6 +928,30 @@ int main()
 	showsize = config.showsize;
 	searchtype = config.searchtype;
 	setSortingFunction();
+
+	if (argc>1)
+	{
+		struct stat tempstat;
+		if (!stat(argv[1], &tempstat)&&S_ISDIR(tempstat.st_mode))
+		{
+			pwdlen = strlen(argv[1]);
+			if (argv[1][pwdlen-1]=='/') --pwdlen;
+			pwd = malloc(pwdlen+2);
+			strcpy(pwd, argv[1]);
+		}
+		else
+		{
+			print("Invalid path\n");
+			return 1;
+		}
+	}
+	else
+	{
+		char *temppwd = getenv("PWD");
+		pwdlen = strlen(temppwd);
+		pwd = malloc(pwdlen+2);
+		strcpy(pwd, temppwd);
+	}
 
 	initcolorpair(7, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
@@ -940,10 +964,6 @@ int main()
 	--maxy; // to fit the search bar
 
 	uint8_t keypressed, windowsInitialised = 1, windowstatus = 0, cutfromwindow = 0;
-	char *temppwd = getenv("PWD");
-	pwdlen = strlen(temppwd);
-	pwd = malloc(pwdlen+2);
-	strcpy(pwd, temppwd);
 	pwd[pwdlen++] = '/';
 	pwd[pwdlen] = 0;
 	savedpwd = malloc(pwdlen+1);
