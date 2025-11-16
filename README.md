@@ -30,6 +30,7 @@ d: create a new directory\
 - - Customizable colors for all types of entries
 - Symlink destinations are shown next to the symlinks
 - Broken symlinks have their own color
+- An option to open a path passed as argument
 # Notes
 - Modifying the config manually is not recommended
 # Copyright

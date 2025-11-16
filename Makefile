@@ -22,5 +22,5 @@ sanitize: LDFLAGS := -fsanitize=address
 sanitize: CFLAGS += -g
 sanitize: fterman
 
-install:
+install: fterman
 	$(INSTALL) fterman ${PREFIX}/bin/fterman

@@ -41,8 +41,6 @@
 					moveprint(maxy, 0, ":");\
 					moveprint(maxy, 1, filter);\
 				}\
-				char workspacestring[2] = "W";\
-				workspacestring[1] = currentWindow+49;\
 				moveprintsize(maxy, maxx-2, workspacestring, 2);
 
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
@@ -588,6 +586,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 	else
 	{
 		text = malloc(1);
+		text[0] = 0;
 		length = 0;
 		currIndex = 0;
 	}
@@ -669,6 +668,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 		printName(text, 0, offset, currIndex, 0, prefixlen);
 	}
 	
+	wrattr(NORMAL);
 	setcursor(0);
 	return text;
 }
@@ -813,14 +813,14 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 		fname = inlineedit(maxy-1, NULL, 2, REGFILECOLOR);
 	}
 
+	move(maxy, 0);
+	clearline();
+
 	if (!fname||fname[0]==0)
 	{
 		*result = (uint32_t)-1;
 		return entries;
 	}
-
-	move(maxy, 0);
-	clearline();
 
 	for (uint32_t i = 0; i<qtyEntries; ++i)
 	{
@@ -849,9 +849,12 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 
 	if (sortingmethod>>1==ALPHABETICGROUP)
 	{
-		for (; index<qtyEntries; ++index)
+		if (!S_ISREG(entries[0].data.st_mode))
 		{
-			if (strccmp(fname, entries[index].name)==-1+2*(sortingmethod&1)) break;
+			for (; index<qtyEntries; ++index)
+			{
+				if (strccmp(fname, entries[index].name)==-1+2*(sortingmethod&1)&&(S_ISDIR(entries[index].data.st_mode)-!isdir)) break;
+			}
 		}
 	}
 	else
@@ -1211,7 +1214,11 @@ int main(int argc, char **argv)
 				redrawentries;
 			}
 			else
+			{
 				drawPath();
+				moveprintsize(maxy, maxx-2, workspacestring, 2);
+				drawEntryCount(offset, currEntry, qtyEntries);
+			}
 		}
 		else if (keypressed==config.createfile)
 		{
@@ -1229,7 +1236,11 @@ int main(int argc, char **argv)
 				redrawentries;
 			}
 			else
+			{
 				drawPath();
+				moveprintsize(maxy, maxx-2, workspacestring, 2);
+				drawEntryCount(offset, currEntry, qtyEntries);
+			}
 		}
 		else if (keypressed>='1'&&keypressed<='4')
 		{
