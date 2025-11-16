@@ -23,4 +23,4 @@ sanitize: CFLAGS += -g
 sanitize: fterman
 
 install:
-	$(INSTALL) fterman /usr/bin/fterman
+	$(INSTALL) fterman ${PREFIX}/bin/fterman

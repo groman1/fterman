@@ -69,6 +69,13 @@ unsigned char getIntLen(long long input)
 	return currFileSizeLen;
 }
 
+// Converts *ch* into a lowercase letter if it isn't already lowercase
+char toLower(char ch)
+{
+	if (ch>='A'&&ch<='Z') return ch+32;
+	return ch;
+}
+
 // Pushes back *string* starting at *startingIndex* by one byte, clearing letter at *startingIndex*
 void strPushback(char *string, int startingIndex)
 {
@@ -92,6 +99,18 @@ entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 	return entries;
 }
 
+// Makes space for an entry at *index* by pushing forward *entries* starting at *index*
+entry_t *entriesPushForward(entry_t *entries, int index, int qtyEntries)
+{
+	++qtyEntries;
+	entries = realloc(entries, sizeof(entry_t)*qtyEntries);
+	for (int i = qtyEntries-2; i>=index; --i)
+	{
+		entries[i+1] = entries[i];
+	}
+	return entries;
+}
+
 // Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
 void strPushfwd(char *string, int startingIndex, int stringLen) // assume string is reallocated properly
 {
@@ -100,6 +119,28 @@ void strPushfwd(char *string, int startingIndex, int stringLen) // assume string
 		string[i] = string[i-1];
 	}
 	string[stringLen+1] = 0;
+}
+
+// Compares two strings but never returns 0
+int8_t strccmp(const char *string1, const char *string2)
+{
+	uint8_t len1 = strlen(string1), len2 = strlen(string2);
+
+	for (int i = 0; i<(len1>len2?len2:len1); ++i)
+	{
+		if (toLower(string1[i])!=toLower(string2[i]))
+		{
+			return toLower(string1[i])<toLower(string2[i])?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
+		}
+	}
+	for (int i = 0; i<(len1>len2?len2:len1); ++i)
+	{
+		if (string1[i]!=string2[i])
+		{
+			return string1[i]<string2[i]?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
+		}
+	}
+	return -1+2*(len1>len2);
 }
 
 // Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
@@ -249,34 +290,12 @@ void drawPath()
 	}
 }
 
-// Converts *ch* into a lowercase letter if it isn't already lowercase
-char toLower(char ch)
-{
-	if (ch>='A'&&ch<='Z') return ch+32;
-	return ch;
-}
-
 // The next four functions use sortingmethod's lowest byte to determine whether to invert the result or not.
 
 // Sorts entries alphabetically, used as compar() by scandir()
 int alphabeticsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
-	uint8_t len1 = strlen((*dirent1)->d_name), len2 = strlen((*dirent2)->d_name);
-	for (int i = 0; i<(len1>len2?len2:len1); ++i)
-	{
-		if (toLower((*dirent1)->d_name[i])!=toLower((*dirent2)->d_name[i]))
-		{
-			return toLower((*dirent1)->d_name[i])<toLower((*dirent2)->d_name[i])?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
-		}
-	}
-	for (int i = 0; i<(len1>len2?len2:len1); ++i)
-	{
-		if ((*dirent1)->d_name[i]!=(*dirent2)->d_name[i])
-		{
-			return (*dirent1)->d_name[i]<(*dirent2)->d_name[i]?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
-		}
-	}
-	return len1>len2?1:-1;
+	return strccmp((*dirent1)->d_name, (*dirent2)->d_name);
 }
 
 // Sorts entries by size, used as compar() by scandir()
@@ -778,7 +797,8 @@ void setSortingFunction()
 	else if (sortingmethod>>1==ACCESSEDTIMEGROUP) sortingfunction = &lastaccessedsort;
 }
 
-uint8_t createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir)
+// Creates an entry, directory or file, depending on *isdir*, and returns its index as *index*
+entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint32_t *result)
 {
 	char *fname;
 
@@ -795,7 +815,8 @@ uint8_t createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir)
 
 	if (!fname||fname[0]==0)
 	{
-		return 1;
+		*result = (uint32_t)-1;
+		return entries;
 	}
 
 	move(maxy, 0);
@@ -807,7 +828,8 @@ uint8_t createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir)
 		{
 			moveprint(0, 0, "The file/directory with this name already exists");
 			in();
-			return 1;
+			*result = i;
+			return entries;
 		}
 	}
 
@@ -822,7 +844,71 @@ uint8_t createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir)
 	}
 
 	while(wait(0)==-1);
-	return 0;
+
+	uint32_t index = 0;
+
+	if (sortingmethod>>1==ALPHABETICGROUP)
+	{
+		for (; index<qtyEntries; ++index)
+		{
+			if (strccmp(fname, entries[index].name)==-1+2*(sortingmethod&1)) break;
+		}
+	}
+	else
+	{
+		switch (sortingmethod>>1)
+		{
+			case ACCESSEDTIMEGROUP:
+			case MODIFIEDTIMEGROUP:
+			{
+				if (!isdir&&(sortingmethod&1)==0)
+				{
+					index = qtyEntries;
+					break;
+				}
+				else if (isdir&&(sortingmethod&1))
+				{
+					index = 0;
+					break;
+				}
+				for (; index<qtyEntries; ++index)
+				{
+					if (!S_ISDIR(entries[index].data.st_mode)) break;
+				}
+				break;
+			}
+			case SIZEGROUP:
+			{
+				if (isdir&&(sortingmethod&1)==0)
+				{
+					index = 0;
+					break;
+				}
+				else if (!isdir&&(sortingmethod&1))
+				{
+					index = qtyEntries;
+					break;
+				}
+				for (; index<qtyEntries; ++index)
+				{
+					if (!S_ISDIR(entries[index].data.st_mode)) break;
+				}
+				break;
+			}
+		}
+	}
+
+	entries = entriesPushForward(entries, index, qtyEntries);
+	entries[index].name = malloc(strlen(fname)+1);
+	strcpy(entries[index].name, fname);
+	stat(fullpath, &entries[index].data);
+
+	free(fname);
+	free(fullpath);
+
+	*result = index;
+
+	return entries;
 }
 
 // These macros will break everything if placed at the top
@@ -846,7 +932,7 @@ int main()
 	initcolorpair(7, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
 
-	if (maxx<40||maxy<25)
+	if (maxx<40||maxy<27)
 	{
 		printf("The terminal window is too small\n");
 		return 1;
@@ -1091,21 +1177,39 @@ int main()
 		}
 		else if (keypressed==config.createdir)
 		{
-			createEntry(entries, qtyEntries, 1);
-			clear();
-			drawPath();
-			windowstatus = 15-(1<<currentWindow);
-			regenerateentries;
-			redrawentries;
+			uint32_t result;
+			entries = createEntry(entries, qtyEntries, 1, &result);
+			if (result!=(uint32_t)-1)
+			{
+				currEntry = result;
+				offset = currEntry?currEntry-1:currEntry;
+				++qtyEntries;
+				
+				clear();
+				drawPath();
+				windowstatus = 15-(1<<currentWindow);
+				redrawentries;
+			}
+			else
+				drawPath();
 		}
 		else if (keypressed==config.createfile)
 		{
-			createEntry(entries, qtyEntries, 0);
-			clear();
-			drawPath();
-			windowstatus = 15-(1<<currentWindow);
-			regenerateentries;
-			redrawentries;
+			uint32_t result;
+			entries = createEntry(entries, qtyEntries, 0, &result);
+			if (result!=(uint32_t)-1)
+			{
+				currEntry = result;
+				offset = currEntry?currEntry-1:currEntry;
+				++qtyEntries;
+				
+				clear();
+				drawPath();
+				windowstatus = 15-(1<<currentWindow);
+				redrawentries;
+			}
+			else
+				drawPath();
 		}
 		else if (keypressed>='1'&&keypressed<='4')
 		{

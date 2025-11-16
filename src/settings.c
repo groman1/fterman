@@ -353,12 +353,12 @@ struct config_s drawSettings()
 					option_tToStr(ch, config->dataArr[currLine].value.str); 
 					highlightSetting(currLine, settings[currLine]);
 				}
-				else if (currLine==18) // show size
+				else if (currLine==19) // show size
 				{
 					config->dataArr[19].value.str[0] = !(config->dataArr[19].value.str[0]!=48)+48;
 					highlightSetting(18, sizestatetext[config->dataArr[19].value.str[0]-48]);
 				}
-				else if (currLine==19) // search : dynamic/static
+				else if (currLine==20) // search : dynamic/static
 				{
 					config->dataArr[20].value.str[0] = !(config->dataArr[20].value.str[0]!=48)+48;
 					highlightSetting(19, searchtext[config->dataArr[20].value.str[0]-48]);
