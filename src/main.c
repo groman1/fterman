@@ -1105,14 +1105,7 @@ int main(int argc, char **argv)
 				if (offset) --offset; 
 			}
 			--qtyEntries;
-			if (qtyEntries) 
-			{
-				redrawentries;
-			}
-			else 
-			{
-				accessdenied();
-			}
+			redrawentries;
 		}
 		else if (keypressed==config.editfile)
 		{
