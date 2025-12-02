@@ -819,7 +819,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	if (!fname||fname[0]==0)
 	{
 		*result = (uint32_t)-1;
-		return entries;
+		return 0;
 	}
 
 	for (uint32_t i = 0; i<qtyEntries; ++i)
@@ -829,7 +829,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 			moveprint(0, 0, "The file/directory with this name already exists");
 			in();
 			*result = i;
-			return entries;
+			return 0;
 		}
 	}
 
@@ -1194,9 +1194,10 @@ int main(int argc, char **argv)
 		else if (keypressed==config.createdir)
 		{
 			uint32_t result;
-			entries = createEntry(entries, qtyEntries, 1, &result);
-			if (result!=(uint32_t)-1)
+			entry_t *tempentries = createEntry(entries, qtyEntries, 1, &result);
+			if (tempentries)
 			{
+				entries = tempentries;
 				currEntry = result;
 				offset = currEntry?currEntry-1:currEntry;
 				++qtyEntries;
@@ -1210,15 +1211,23 @@ int main(int argc, char **argv)
 			{
 				drawPath();
 				moveprintsize(maxy, maxx-2, workspacestring, 2);
-				drawEntryCount(offset, currEntry, qtyEntries);
+				if (result!=(uint32_t)-1)
+				{
+					currEntry = result;
+					offset = currEntry?currEntry-1:currEntry;
+					move(1,0);
+					cleartobot();
+					redrawentries;
+				}
 			}
 		}
 		else if (keypressed==config.createfile)
 		{
 			uint32_t result;
-			entries = createEntry(entries, qtyEntries, 0, &result);
-			if (result!=(uint32_t)-1)
+			entry_t *tempentries = createEntry(entries, qtyEntries, 0, &result);
+			if (tempentries)
 			{
+				entries = tempentries;
 				currEntry = result;
 				offset = currEntry?currEntry-1:currEntry;
 				++qtyEntries;
@@ -1232,7 +1241,14 @@ int main(int argc, char **argv)
 			{
 				drawPath();
 				moveprintsize(maxy, maxx-2, workspacestring, 2);
-				drawEntryCount(offset, currEntry, qtyEntries);
+				if (result!=(uint32_t)-1)
+				{
+					currEntry = result;
+					offset = currEntry?currEntry-1:currEntry;
+					move(1,0);
+					cleartobot();
+					redrawentries;
+				}
 			}
 		}
 		else if (keypressed>='1'&&keypressed<='4')
