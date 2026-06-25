@@ -1,7 +1,7 @@
-#include <unistd.h>
-#include <stdint.h>
 #ifndef RAWTUI_H_
 #define RAWTUI_H_
+
+#include <stdint.h>
 
 #define colorpair_t uint8_t
 #define attr_t uint8_t
@@ -41,6 +41,7 @@ void getTermXY(uint16_t *y, uint16_t *x);
 void getCursorPos(uint16_t *y, uint16_t *x);
 void clearline();
 void print(char *string);
+void printc(char c);
 void printsize(char *string, int len);
 void moveprint(uint16_t y, uint16_t x, char *string);
 void moveprintsize(uint16_t y, uint16_t x, char *string, int len);

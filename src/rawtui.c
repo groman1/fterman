@@ -1,30 +1,13 @@
-#include <termios.h>
-#include <unistd.h>
 #include <stdint.h>
 #include <string.h>
+#include "rawtui.h"
+#include <termios.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
+#include <fcntl.h>
 
-#define colorpair_t uint8_t
-#define attr_t uint8_t
-
-#define NORMAL 0
-#define BOLD 1<<0
-#define FAINT 1<<1
-#define BLINK 1<<2
-#define REVERSE 1<<3
-#define UNDERLINE 1<<4
-
-#define BLACK 0
-#define	RED 1
-#define GREEN 2
-#define YELLOW 3
-#define BLUE 4
-#define MAGENTA 5
-#define CYAN 6
-#define WHITE 7
-
-struct termios originalterminal;
 colorpair_t pairs[256];
+static struct termios originalterminal;
 
 void initcolorpair(uint8_t id, uint8_t foreground, uint8_t background)
 {
@@ -37,6 +20,7 @@ void init()
 	struct termios terminal;
 	cfmakeraw(&terminal);
 	tcsetattr(STDIN_FILENO, 0, &terminal);
+	initcolorpair(0, WHITE, BLACK);
 	write(STDOUT_FILENO, "\x1b[?1049h", 8); // alternative buffer
 }
 
@@ -97,8 +81,13 @@ uint8_t inesc()
 	read(STDIN_FILENO, &ret, 1);
 	if (ret==27)
 	{
+		fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL)|O_NONBLOCK);
 		unsigned char buffer[2];
-		read(STDIN_FILENO, &buffer, 2);
+		if (read(STDIN_FILENO, &buffer, 2)==-1) // ESC
+		{
+			fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL)^O_NONBLOCK);
+			return ret;
+		}
 		switch (buffer[0])
 		{
 			case 'O':
@@ -146,6 +135,7 @@ uint8_t inesc()
 				break;
 			}
 		}
+		fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL)^O_NONBLOCK);
 	}
 	return ret;
 }
@@ -257,4 +247,11 @@ void moveprint(uint16_t y, uint16_t x, char *string)
 {
 	move(y,x);
 	print(string);
+}
+
+void printc(char c)
+{
+	char s[2];
+	s[0] = c;
+	print(s);
 }
