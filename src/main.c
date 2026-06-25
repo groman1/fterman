@@ -719,8 +719,9 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 }
 
 // Opens search menu, sets *filter* to the phrase entered and regenerates file list
-void search(int qtyEntries)
+void search()
 {
+	int qtyEntries;
 	entry_t *entries = getFileList(&qtyEntries);
 	uint8_t filterlen = strlen(filter), keypressed;
 	if (searchtype) drawEntryCount(0, 0, qtyEntries);
@@ -1001,11 +1002,10 @@ int main(int argc, char **argv)
 
 	while ((keypressed=inesc()))
 	{
-		if (keypressed==config.quit)
-		{	break;	}
+		if (keypressed==config.quit) break;
 		else if (keypressed==config.goFwd)
 		{	
-			if (qtyEntries) 
+			if (qtyEntries)
 			{
 				entries = enterObject(entries, &currEntry, &qtyEntries, &offset);
 				moveprintsize(maxy, maxx-2, workspacestring, 2);
@@ -1013,7 +1013,7 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.goDown)
 		{	
-			if (currEntry<qtyEntries-1) 
+			if (currEntry<qtyEntries-1)
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				++currEntry; 
@@ -1028,7 +1028,7 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.goUp)
 		{	
-			if (currEntry>0) 
+			if (currEntry>0)
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				--currEntry; 
@@ -1043,7 +1043,7 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.goDownLong)
 		{
-			if (currEntry<qtyEntries-1) 
+			if (currEntry<qtyEntries-1)
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				offset += maxy-1;
@@ -1064,7 +1064,7 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.goUpLong)
 		{
-			if (currEntry>0) 
+			if (currEntry>0)
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				offset -= maxy-1; 
@@ -1080,7 +1080,7 @@ int main(int argc, char **argv)
 			}
 		}
 		else if (keypressed==config.goBack)
-		{	
+		{
 			if (pwdlen>1)
 			{
 				backpwd = goback(backpwd);
@@ -1093,39 +1093,45 @@ int main(int argc, char **argv)
 			}	
 		}
 		else if (keypressed==config.deletefile)
-		{	
-			deleteFile(entries[currEntry].name); 
-			deHighlightEntry(entries[currEntry], currEntry-offset); 
-			entries = entriesPushback(entries, currEntry, qtyEntries);
-			clear();
-			drawPath();
-			if (currEntry==qtyEntries-1)
-			{ 
-				--currEntry; 
-				if (offset) --offset; 
+		{
+			if (qtyEntries)
+			{
+				deleteFile(entries[currEntry].name); 
+				deHighlightEntry(entries[currEntry], currEntry-offset); 
+				entries = entriesPushback(entries, currEntry, qtyEntries);
+				clear();
+				drawPath();
+				if (currEntry==qtyEntries-1)
+				{ 
+					--currEntry; 
+					if (offset) --offset;
+				}
+				--qtyEntries;
+				redrawentries;
 			}
-			--qtyEntries;
-			redrawentries;
 		}
 		else if (keypressed==config.editfile)
 		{
-			editfname(&entries[currEntry], currEntry-offset); 
-			regenerateentries;
-			redrawentries;
+			if (qtyEntries)
+			{
+				editfname(&entries[currEntry], currEntry-offset); 
+				regenerateentries;
+				redrawentries;
+			}
 		}
 		else if (keypressed==config.savedir) savePWD();
 		else if (keypressed==config.loaddir)
 		{	
-			loadsavedPWD(); 
-			currEntry = offset = 0; 
+			loadsavedPWD();
+			currEntry = offset = 0;
 			redrawentries;
 		}
-		else if (keypressed==15)
+		else if (keypressed==15) // ctrl-o
 		{	
-			config = drawSettings(); 
-			if (sortingmethod!=config.sortingmethod) 
+			config = drawSettings();
+			if (sortingmethod!=config.sortingmethod)
 			{
-				currEntry = offset = 0; 
+				currEntry = offset = 0;
 				sortingmethod = config.sortingmethod;
 				setSortingFunction();
 				regenerateentries;
@@ -1138,14 +1144,20 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.copy)
 		{
-			keepoldFile = 1;
-			savecpPWD(entries[currEntry].name);
+			if (qtyEntries)
+			{
+				keepoldFile = 1;
+				savecpPWD(entries[currEntry].name);
+			}
 		}
 		else if (keypressed==config.cut)
 		{
-			keepoldFile = 0;
-			cutfromwindow = currentWindow;
-			savecpPWD(entries[currEntry].name);
+			if (qtyEntries)
+			{
+				keepoldFile = 0;
+				cutfromwindow = currentWindow;
+				savecpPWD(entries[currEntry].name);
+			}
 		}
 		else if (keypressed==config.paste)
 		{
@@ -1155,7 +1167,7 @@ int main(int argc, char **argv)
 				regenerateentries;
 				redrawentries;
 			}
-			if (keepoldFile==0) 
+			if (keepoldFile==0)
 			{
 				keepoldFile = -1;
 				windowstatus |= 1<<cutfromwindow;
@@ -1165,7 +1177,7 @@ int main(int argc, char **argv)
 		{
 			currEntry = 0;
 			offset = 0;
-			search(qtyEntries);
+			search();
 			if (searchtype)
 			{
 				if (qtyEntries) freeFileList(entries, qtyEntries);
@@ -1266,8 +1278,11 @@ int main(int argc, char **argv)
 			workspacestring[1] = currentWindow+49;
 			clear();
 			drawPath();
-			if (windowstatus>>currentWindow&1) 
-			{ regenerateentries; windowstatus ^= 1<<currentWindow; }
+			if (windowstatus>>currentWindow&1)
+			{
+				regenerateentries;
+				windowstatus ^= 1<<currentWindow;
+			}
 			redrawentries;
 		}
 		getTermXY(&maxy, &maxx);
