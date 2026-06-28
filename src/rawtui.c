@@ -229,7 +229,7 @@ void clearline()
 
 void printsize(char *string, int len)
 {
-	write(STDOUT_FILENO, string, len);
+	write(STDOUT_FILENO, string, (int)strlen(string)<len?(int)strlen(string):len);
 }
 
 void moveprintsize(uint16_t y, uint16_t x, char *string, int len)

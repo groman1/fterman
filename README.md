@@ -34,4 +34,4 @@ d: create a new directory\
 # Notes
 - Modifying the config manually is not recommended
 # Copyright
-FTerMan, RawTUI and xmltools are licensed under GNU General Public License. See LICENSE for details
+FTerMan, RawTUI (modified) and xmltools are licensed under GNU General Public License version 3. See LICENSE for details.

@@ -38,7 +38,7 @@
 				else accessdenied();\
 				if (filter[0])\
 				{\
-					moveprint(maxy, 0, ":");\
+					moveprint(maxy, 0, "/");\
 					moveprint(maxy, 1, filter);\
 				}\
 				moveprintsize(maxy, maxx-2, workspacestring, 2);
@@ -47,6 +47,7 @@ int (*sortingfunction)(const struct dirent**, const struct dirent**);
 uint16_t maxx, maxy, pwdlenarr[4];
 int8_t keepoldFile, sortingmethod, showsize, searchtype, currentWindow;
 char *pwdarr[4], *filterarr[4], *savedpwd, *filecppwd;
+char workspacestring[2] = "W";
 
 typedef struct
 {
@@ -55,10 +56,10 @@ typedef struct
 } entry_t;
 
 // Returns the amount of characters required to store *input* in a string
-unsigned char getIntLen(long long input)
+uint8_t getIntLen(long long input)
 {
-	unsigned char currFileSizeLen = 1;
-	unsigned long long multiplier = 10;
+	uint8_t currFileSizeLen = 1;
+	uint64_t multiplier = 10;
 	while (input/multiplier)
 	{
 		++currFileSizeLen;
@@ -78,9 +79,8 @@ char toLower(char ch)
 void strPushback(char *string, int startingIndex)
 {
 	for (; string[startingIndex+1]; ++startingIndex)
-	{
 		string[startingIndex] = string[startingIndex+1];
-	}
+
 	string[startingIndex] = 0;
 }
 
@@ -89,9 +89,8 @@ entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 {
 	free(entries[startingIndex].name);
 	for (; startingIndex<qtyEntries-1; ++startingIndex)
-	{
 		entries[startingIndex] = entries[startingIndex+1];
-	}
+
 	--qtyEntries;
 	entries = realloc(entries, sizeof(entry_t)*qtyEntries);
 	return entries;
@@ -103,9 +102,8 @@ entry_t *entriesPushForward(entry_t *entries, int index, int qtyEntries)
 	++qtyEntries;
 	entries = realloc(entries, sizeof(entry_t)*qtyEntries);
 	for (int i = qtyEntries-2; i>=index; --i)
-	{
 		entries[i+1] = entries[i];
-	}
+
 	return entries;
 }
 
@@ -113,9 +111,8 @@ entry_t *entriesPushForward(entry_t *entries, int index, int qtyEntries)
 void strPushfwd(char *string, int startingIndex, int stringLen) // assume string is reallocated properly
 {
 	for (int i = stringLen; i>startingIndex; --i)
-	{
 		string[i] = string[i-1];
-	}
+
 	string[stringLen+1] = 0;
 }
 
@@ -125,20 +122,50 @@ int8_t strccmp(const char *string1, const char *string2)
 	uint8_t len1 = strlen(string1), len2 = strlen(string2);
 
 	for (int i = 0; i<(len1>len2?len2:len1); ++i)
-	{
 		if (toLower(string1[i])!=toLower(string2[i]))
-		{
 			return toLower(string1[i])<toLower(string2[i])?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
-		}
-	}
+
 	for (int i = 0; i<(len1>len2?len2:len1); ++i)
-	{
 		if (string1[i]!=string2[i])
-		{
 			return string1[i]<string2[i]?1*(-1+(sortingmethod&1)*2):-1*(-1+(sortingmethod&1)*2);
-		}
+
+	return 2*(len1>len2)-1;
+}
+
+// Print the (not always) overflowing search text from search() function
+// TODO: implement into printName ( for better file editing experience (idk if anyone has files with names more than the window, but whatever) )
+void overflowPrint(char *text, uint8_t len, uint8_t maxlen, uint16_t offset, uint8_t xoffset, uint8_t currIndex)
+{
+	move(offset+1, xoffset);
+	uint8_t hasTrailing = 0, hasLeading = 0;
+
+	if (currIndex>=maxlen-2)
+	{
+		// trailing
+		hasTrailing = 1;
+		print("..");
+		maxlen -= 2;
+		len -= maxlen;
+		currIndex -= maxlen;
 	}
-	return -1+2*(len1>len2);
+	// whether to draw leading .. or not
+	if (currIndex/(maxlen-2)<len/(maxlen-2))
+	{
+		maxlen -= 2;
+		hasLeading = 1;
+	}
+
+	printsize(text+((currIndex/maxlen+hasTrailing)*maxlen), maxlen);
+
+	// leading
+	if (hasLeading)
+		print("..");
+
+	move(offset+1, xoffset+(currIndex+(maxlen+2)*hasTrailing)%maxlen);
+
+	// 0: maxlen-2
+	// 1 - x-1: maxlen-4
+	// x: maxlen-2
 }
 
 // Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
@@ -167,7 +194,7 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 	}
 	else i = 0;
 
-	print(&name[i]);
+	print(name+i);
 	i = strlen(name);
 
 	if (i+fileSizeLen+1<maxx)
@@ -185,7 +212,7 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 	}
 	else
 	{
-		move(1+offset, maxx-(i-currIndex)-fileSizeLen-1);
+		move(1+offset, maxx-(i-currIndex)-fileSizeLen-2);
 		wrattr(NORMAL);
 	}
 
@@ -370,11 +397,12 @@ int filefilter(const struct dirent *entry)
 entry_t *getFileList(int *qtyEntries)
 {
 	char *fileName;
-	entry_t *fileList;
+	entry_t *fileList = 0;
 	int currLength, offset = 0; // offset is the number of "." and ".." currently found
 	struct dirent **entries;
 	int n;
 	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
+	if (n==0) goto filescan;
 
 	if (n==-1) 
 	{ *qtyEntries = 0; return 0; }
@@ -390,10 +418,12 @@ entry_t *getFileList(int *qtyEntries)
 		free(entries[i]);
 	}
 	free(entries);
+
+filescan:
 	*qtyEntries = n;
 	n = scandir(pwd, &entries, &filefilter, sortingfunction);
 
-	if (n==-1) 
+	if (n<=0) 
 	{ *qtyEntries = 0; return 0; }
 	fileList = realloc(fileList, (*qtyEntries+n)*sizeof(entry_t));
 	offset = 0;
@@ -444,10 +474,10 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 	wrattr(NORMAL);
 }
 
-// Prints access denied message
+// Prints access denied message (changed into no files found)
 void accessdenied()
 {
-	moveprint(1,0,"No files found");
+	moveprint(1, 0, "No files found");
 }
 
 // Removes the last directory from *pwd* and copies the removed string to *backpath*
@@ -472,8 +502,6 @@ char *goback(char *backpath)
 // Checks if the entry ( *entries[*entryID]* ) is a file, link or directory. If it is a link, determines whether the link is pointing to a file or a directory. In both cases, if entry is a directory, opens it and gets the file list there. If entry is a file, opens it in a file editor determined by environment variable EDITOR
 entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offset)
 {
-	filter = realloc(filter, 1);
-	filter[0] = 0;
 	struct stat tempstat;
 	if (S_ISLNK(entries[*entryID].data.st_mode))
 	{
@@ -497,8 +525,8 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		pwd[pwdlen++] = '/';
 		pwd[pwdlen] = 0;
 		freeFileList(entries, *qtyEntries);
-		entries = getFileList(qtyEntries);	
-		if (*qtyEntries) 
+		entries = getFileList(qtyEntries);
+		if (*qtyEntries)
 		{
 			clear();
 			drawPath();
@@ -594,7 +622,6 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 	setcursor(1);
 	move(offset+1, prefixlen);
 	cleartoeol();
-	char workspacestring[2] = "W";
 	workspacestring[1] = currentWindow+49;
 
 	saveCursorPos();
@@ -718,46 +745,53 @@ int findentry(char *entryname, entry_t *entries, int qtyEntries)
 	return -1;
 }
 
-// Opens search menu, sets *filter* to the phrase entered and regenerates file list
+// Opens search menu, sets *filter* to the phrase entered
 void search()
 {
-	int qtyEntries;
-	entry_t *entries = getFileList(&qtyEntries);
-	uint8_t filterlen = strlen(filter), keypressed;
-	if (searchtype) drawEntryCount(0, 0, qtyEntries);
+	int qtyEntries = 0;
+	entry_t *entries = 0;
+	uint8_t filterlen = strlen(filter), keypressed, currIndex;
+	currIndex = filterlen;
+
 	char workspacestring[2] = "W";
 	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
-	moveprint(maxy, 0, ":");
-	moveprint(maxy, 1, filter);
-	qtyEntries = 0;
+	moveprint(maxy, 0, "/");
+	overflowPrint(filter, filterlen, maxx-4, maxy-1, 1, currIndex);
 	setcursor(1);
-	while((keypressed=inesc()))
+	while((keypressed = inesc()))
 	{
 		switch (keypressed)
 		{
 			case 'a'...'z': case 'A'...'Z': case '-': case '+': case '0'...'9': case '.': case '_':
 			{ 
-				if (filterlen<maxx-2)
+				if (filterlen<255)
 				{
-					filter = realloc(filter, ++filterlen+1); 
-					filter[filterlen-1] = keypressed;
+					filter = realloc(filter, filterlen+2); 
+					if (filterlen!=currIndex) strPushfwd(filter, currIndex, filterlen);
+					++filterlen;
+					filter[currIndex++] = keypressed;
 					filter[filterlen] = 0;
+					if (currIndex==filterlen) filter[currIndex] = 0;
 					move(maxy, 1);
-					cleartoeol();
+					clearline();
+					moveprint(maxy, 0, "/");
+					moveprintsize(maxy, maxx-2, workspacestring, 2);
+					overflowPrint(filter, filterlen, maxx-4, maxy-1, 1, currIndex);
 				}
 				break;
 			}
 			case 127:
 			{
-				if (filterlen)
+				if (currIndex)
 				{
-					filter = realloc(filter, --filterlen+1); 
-					filter[filterlen] = 0;
+					strPushback(filter, --currIndex);
+					filter = realloc(filter, filterlen--); 
 					move(maxy, 0);
 					clearline();
-					moveprint(maxy, 0, ":");
-					moveprint(maxy, 1, filter);
+					moveprint(maxy, 0, "/");
+					moveprintsize(maxy, maxx-2, workspacestring, 2);
+					overflowPrint(filter, filterlen, maxx-4, maxy-1, 1, currIndex);
 				}
 				break;
 			}
@@ -767,23 +801,38 @@ void search()
 				setcursor(0); 
 				return;
 			}
+			case 3:
+			{
+				if (qtyEntries&&searchtype) freeFileList(entries, qtyEntries);
+				filter = realloc(filter, 1);
+				*filter = 0;
+				setcursor(0);
+				return;
+			}
+			case 191:
+			{
+				if (currIndex>0) --currIndex;
+				break;
+			}
+			case 190:
+			{
+				if (currIndex<filterlen) ++currIndex;
+				break;
+			}
 		}
 
 		if (searchtype)
 		{
-			if (qtyEntries) freeFileList(entries, qtyEntries);
-			entries = getFileList(&qtyEntries);
+			regenerateentries;
 			drawEntryCount(0, 0, qtyEntries);
 			setcursor(0);
 			move(1,0);
 			cleartobot();
+			if (!qtyEntries) accessdenied();
 			drawObjects(entries, 0, qtyEntries);
-			moveprint(maxy, 0, ":");
-			moveprint(maxy, 1, filter);
-			
-			saveCursorPos();
 			moveprintsize(maxy, maxx-2, workspacestring, 2);
-			loadCursorPos();
+			moveprint(maxy, 0, "/");
+			overflowPrint(filter, filterlen, maxx-4, maxy-1, 1, currIndex);
 			setcursor(1);
 		}
 	}
@@ -922,7 +971,6 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 #define qtyEntries qtyEntriesarr[currentWindow]
 #define entries entriesarr[currentWindow]
 
-
 int main(int argc, char **argv)
 {
 	struct option_s config = loadConfig();
@@ -996,7 +1044,6 @@ int main(int argc, char **argv)
 	drawObjects(entries, 0, qtyEntries);
 	if (qtyEntries) highlightEntry(entries[0], 0);
 
-	char workspacestring[2] = "W";
 	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
 
@@ -1178,19 +1225,10 @@ int main(int argc, char **argv)
 			currEntry = 0;
 			offset = 0;
 			search();
-			if (searchtype)
-			{
-				if (qtyEntries) freeFileList(entries, qtyEntries);
-				entries = getFileList(&qtyEntries);
-				if (qtyEntries) highlightEntry(entries[0], 0);
-			}
-			else
-			{
-				move(1,0);
-				cleartobot();
-				regenerateentries;
-				redrawentries;
-			}
+			move(1,0);
+			cleartobot();
+			regenerateentries;
+			redrawentries;
 		}
 		else if (keypressed==config.cancelsearch)
 		{
