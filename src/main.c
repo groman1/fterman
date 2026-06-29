@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -296,10 +297,10 @@ void copycutFile(int keepoldFile)
 // Draws the top-right status line (current entry, offset, etc)
 void drawEntryCount(int offset, int currentry, int qtyEntries)
 {
-	move(0, maxx-34);
-	cleartoeol();
 	char entrycntstring[46];
 	sprintf(entrycntstring, "%d-(%d)-%d/%d", offset+1, currentry+1, offset+maxy-3>qtyEntries?qtyEntries:offset+maxy-3, qtyEntries);
+	move(0, maxx-strlen(entrycntstring)-2);
+	cleartoeol();
 	moveprint(0, maxx-strlen(entrycntstring), entrycntstring);
 }
 
@@ -309,10 +310,12 @@ void drawPath()
 	move(0,0);
 	clearline();
 	if (pwdlen<maxx) print(pwd);
-	else 
-	{
-		printsize(pwd, maxx-2);
-	}
+	else printsize(pwd, maxx-2);
+}
+
+void drawCentered(char *text)
+{
+	moveprint(maxy/2, maxx/2-strlen(text)/2, text);
 }
 
 // The next four functions use sortingmethod's lowest byte to determine whether to invert the result or not.
@@ -971,6 +974,32 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 #define qtyEntries qtyEntriesarr[currentWindow]
 #define entries entriesarr[currentWindow]
 
+int qtyEntriesarr[4], currEntryarr[4], offsetarr[4];
+entry_t *entriesarr[4];
+
+uint8_t ignoreinput = 0;
+
+// Handles resize operations
+// TODO URGENT: Fix the 85 code happening after the proper window size is set
+void resizehandler(int)
+{
+	ignoreinput = 1;
+	clear();
+	// magic trick to avoid interrupting the main thread
+	write(STDIN_FILENO, "\0", 1);
+	getTermXY(&maxy, &maxx);
+	--maxy;
+
+	if (maxx<40||maxy<25)
+	{
+		drawCentered("The terminal window is too small");
+		return;
+	}
+	ignoreinput = 0;
+	drawPath();
+	redrawentries;
+}
+
 int main(int argc, char **argv)
 {
 	struct option_s config = loadConfig();
@@ -1008,11 +1037,6 @@ int main(int argc, char **argv)
 	initcolorpair(7, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
 
-	if (maxx<40||maxy<27)
-	{
-		printf("The terminal window is too small\n");
-		return 1;
-	}
 	--maxy; // to fit the search bar
 
 	uint8_t keypressed, windowsInitialised = 1, windowstatus = 0, cutfromwindow = 0;
@@ -1021,7 +1045,6 @@ int main(int argc, char **argv)
 	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
 
-	int qtyEntriesarr[4], currEntryarr[4], offsetarr[4];
 	char *backpwdarr[4];
 	for (int i = 0; i<4; ++i)
 	{
@@ -1034,7 +1057,6 @@ int main(int argc, char **argv)
 	}
 
 	keepoldFile = -1;
-	entry_t *entriesarr[4];
 	entries = getFileList(&qtyEntries);
 	init();
 	setcursor(0);
@@ -1047,8 +1069,20 @@ int main(int argc, char **argv)
 	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
 
+	if (maxx<40||maxy<25)
+	{
+		ignoreinput = 1;
+		clear();
+		drawCentered("The terminal window is too small");
+	}
+
+	const struct sigaction sa = {.sa_handler = resizehandler};
+
+	sigaction(SIGWINCH, &sa, NULL);
+
 	while ((keypressed=inesc()))
 	{
+		if (ignoreinput&&keypressed!=config.quit) continue;
 		if (keypressed==config.quit) break;
 		else if (keypressed==config.goFwd)
 		{	
@@ -1323,7 +1357,6 @@ int main(int argc, char **argv)
 			}
 			redrawentries;
 		}
-		getTermXY(&maxy, &maxx);
 	}
 
 	for (int i = 0; i<4; ++i)
