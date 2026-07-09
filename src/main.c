@@ -985,8 +985,6 @@ void resizehandler(int)
 {
 	ignoreinput = 1;
 	clear();
-	// magic trick to avoid interrupting the main thread
-	write(STDIN_FILENO, "\0", 1);
 	getTermXY(&maxy, &maxx);
 	--maxy;
 
@@ -1028,10 +1026,9 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		char *temppwd = getenv("PWD");
-		pwdlen = strlen(temppwd);
-		pwd = malloc(pwdlen+2);
-		strcpy(pwd, temppwd);
+		pwd = getcwd(0,0);
+		pwdlen = strlen(pwd);
+		pwd = realloc(pwd, pwdlen+2);
 	}
 
 	initcolorpair(7, BLACK, GREEN);
@@ -1076,11 +1073,11 @@ int main(int argc, char **argv)
 		drawCentered("The terminal window is too small");
 	}
 
-	const struct sigaction sa = {.sa_handler = resizehandler};
+	const struct sigaction sa = {.sa_handler = resizehandler, .sa_flags = SA_RESTART};
 
 	sigaction(SIGWINCH, &sa, NULL);
 
-	while ((keypressed=inesc()))
+	while ((keypressed = inesc()))
 	{
 		if (ignoreinput&&keypressed!=config.quit) continue;
 		if (keypressed==config.quit) break;
