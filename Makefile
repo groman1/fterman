@@ -1,26 +1,50 @@
-OBJECTFILES := src/main.o src/settings.o src/xmltools.o src/rawtui.o
-CFLAGS := -Wall -Wextra -Werror -Wno-unused-but-set-parameter
+PROGNAME := fterman
+
+CFLAGS := -Wall -Werror -Wextra -Wno-unused-but-set-parameter
+LDFLAGS := 
+
 RM := rm -f
 INSTALL := install
 
+OBJECTFILES := $(patsubst src/%.c, src/%.o, $(wildcard src/*.c))
+
 main: CFLAGS += -O2
-main: fterman
+main: LDFLAGS += -O2
+main: $(PROGNAME)
 
-fterman: $(OBJECTFILES)
-	$(CC) $(LDFLAGS) $^ -o $@
-
-clean: 
-	$(RM) $(OBJECTFILES) fterman
-
-src/%.o: src/%.c
-	$(CC) -c $< ${CFLAGS} -o $@ 
+sanitizer: LDFLAGS := -fsanitize=address
+sanitizer: debug
 
 debug: CFLAGS += -g
-debug: fterman
+debug: LDFLAGS += -g
+debug: $(PROGNAME)
 
-sanitize: LDFLAGS := -fsanitize=address
-sanitize: CFLAGS += -g
-sanitize: fterman
+$(PROGNAME):
+$(PROGNAME): info build
 
-install: fterman
-	$(INSTALL) fterman ${PREFIX}/bin/fterman
+info:
+	@$(info Building with:)
+	@$(info CFLAGS := $(CFLAGS))
+	@$(info LDFLAGS := $(LDFLAGS))
+
+build: $(OBJECTFILES)
+build: link
+
+link: $(OBJECTFILES)
+	@$(info LD $(PROGNAME))
+	@$(CC) $^ $(LDFLAGS) -o $(PROGNAME)
+
+src/%.o: src/%.c
+	@$(info CC $<)
+	@$(CC) -c $< $(CFLAGS) -o $@
+
+clean:
+	@$(info RM$(OBJECTFILES))
+	@$(RM) $(OBJECTFILES)
+	@$(info RM $(PROGNAME))
+	@$(RM) $(PROGNAME)
+	
+
+install: fsort
+	@$(info INSTALL $(PROGNAME))
+	@$(INSTALL) $(PROGNAME) /bin/
