@@ -45,6 +45,6 @@ clean:
 	@$(RM) $(PROGNAME)
 	
 
-install: fsort
+install:
 	@$(info INSTALL $(PROGNAME))
 	@$(INSTALL) $(PROGNAME) /bin/

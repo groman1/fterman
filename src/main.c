@@ -26,7 +26,7 @@
 #define ACCESSEDTIMEGROUP 2
 #define MODIFIEDTIMEGROUP 3
 
-#define UNUSED -1
+#define UNUSED 0
 
 #define regenerateentries\
 				if (qtyEntries) freeFileList(entries, qtyEntries);\
@@ -133,9 +133,8 @@ int8_t strccmp(const char *string1, const char *string2)
 	return 2*(len1>len2)-1;
 }
 
-// Print the (not always) overflowing search text from search() function
-// TODO: implement into printName ( for better file editing experience (idk if anyone has files with names more than the window, but whatever) )
-void overflowPrint(char *text, uint8_t len, uint8_t maxlen, uint16_t offset, uint8_t xoffset, uint8_t currIndex)
+// Print the (not always) overflowing search text from search() function. Returns the offset at which the cursor has been placed
+uint8_t overflowPrint(char *text, uint8_t len, uint8_t maxlen, uint16_t offset, uint8_t xoffset, uint8_t currIndex)
 {
 	move(offset+1, xoffset);
 	uint8_t hasTrailing = 0, hasLeading = 0;
@@ -164,17 +163,15 @@ void overflowPrint(char *text, uint8_t len, uint8_t maxlen, uint16_t offset, uin
 
 	move(offset+1, xoffset+(currIndex+(maxlen+2)*hasTrailing)%maxlen);
 
-	// 0: maxlen-2
-	// 1 - x-1: maxlen-4
-	// x: maxlen-2
+	return (currIndex+(maxlen+2)*hasTrailing)%maxlen;
 }
 
 // Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
-void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t isasymlink, uint8_t prefixlen)
+void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIndex, uint8_t isasymlink, uint8_t prefixlen)
 {
 	move(1+offset, prefixlen);
-	int i = strlen(name);
-	char *linkpath;
+	uint8_t namelen = strlen(name);
+	char *linkpath = 0;
 	if (!showsize) fileSizeLen = 0;
 	if (isasymlink)
 	{
@@ -188,36 +185,18 @@ void printName(char *name, int fileSizeLen, int offset, int currIndex, uint8_t i
 		}
 	}
 
-	if (i+fileSizeLen+1>=maxx)
-	{
-		print("..");
-		i -= maxx-fileSizeLen-4;
-	}
-	else i = 0;
+	uint8_t xoff = overflowPrint(name, namelen, maxx-fileSizeLen-(fileSizeLen!=0), offset, prefixlen, currIndex);
 
-	print(name+i);
-	i = strlen(name);
-
-	if (i+fileSizeLen+1<maxx)
+	if (isasymlink)
 	{
-		if (isasymlink)
+		if (xoff+fileSizeLen+(fileSizeLen!=0)+4+strlen(linkpath)+prefixlen<maxx)
 		{
-			if (i+fileSizeLen+4+strlen(linkpath)+prefixlen<maxx)
-			{
-				moveprint(1+offset, i+prefixlen, " => ");
-				moveprint(1+offset, i+prefixlen+4, linkpath);
-			}
+			print(" => ");
+			print(linkpath);
 		}
-		wrattr(NORMAL);
-		move(1+offset, currIndex+prefixlen);
-	}
-	else
-	{
-		move(1+offset, maxx-(i-currIndex)-fileSizeLen-2);
-		wrattr(NORMAL);
+		free(linkpath);
 	}
 
-	if (isasymlink) free(linkpath);
 }
 
 // Prints file size *size* at offset *offset*
@@ -850,7 +829,7 @@ void setSortingFunction()
 	else if (sortingmethod>>1==ACCESSEDTIMEGROUP) sortingfunction = &lastaccessedsort;
 }
 
-// Creates an entry, directory or file, depending on *isdir*, and returns its index as *index*
+// Creates an entry, directory or file, depending on *isdir*, and returns the entries array
 entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint32_t *result)
 {
 	char *fname;
@@ -866,6 +845,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 		fname = inlineedit(maxy-1, NULL, 2, REGFILECOLOR);
 	}
 
+	wrcolorpair(1);
 	move(maxy, 0);
 	clearline();
 
@@ -879,7 +859,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	{
 		if (!strcmp(entries[i].name, fname))
 		{
-			moveprint(0, 0, "The file/directory with this name already exists");
+			moveprint(maxy, 0, "The file/directory with this name already exists");
 			in();
 			*result = i;
 			return 0;
@@ -980,16 +960,15 @@ entry_t *entriesarr[4];
 uint8_t ignoreinput = 0;
 
 // Handles resize operations
-// TODO URGENT: Fix the 85 code happening after the proper window size is set
 void resizehandler(int)
 {
-	ignoreinput = 1;
 	clear();
 	getTermXY(&maxy, &maxx);
 	--maxy;
 
 	if (maxx<40||maxy<25)
 	{
+		ignoreinput = 1;
 		drawCentered("The terminal window is too small");
 		return;
 	}
@@ -1062,11 +1041,12 @@ int main(int argc, char **argv)
 	drawEntryCount(0, 0, qtyEntries);
 	drawObjects(entries, 0, qtyEntries);
 	if (qtyEntries) highlightEntry(entries[0], 0);
+	else accessdenied();
 
 	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
 
-	if (maxx<40||maxy<25)
+	if (maxx<40||maxy<25) // capped by settings window
 	{
 		ignoreinput = 1;
 		clear();
@@ -1166,6 +1146,7 @@ int main(int argc, char **argv)
 				drawPath();
 				regenerateentries;
 				currEntry = findentry(backpwd, entries, qtyEntries);
+				if (currEntry==-1) currEntry = 0;
 				offset = currEntry?currEntry-1:currEntry;
 				redrawentries;
 			}	
@@ -1205,7 +1186,9 @@ int main(int argc, char **argv)
 			redrawentries;
 		}
 		else if (keypressed==15) // ctrl-o
-		{	
+		{
+			// TODO make compatible with the resizing menu
+
 			config = drawSettings();
 			if (sortingmethod!=config.sortingmethod)
 			{
@@ -1296,10 +1279,10 @@ int main(int argc, char **argv)
 				{
 					currEntry = result;
 					offset = currEntry?currEntry-1:currEntry;
-					move(1,0);
-					cleartobot();
-					redrawentries;
 				}
+				move(1,0);
+				cleartobot();
+				redrawentries;
 			}
 		}
 		else if (keypressed==config.createfile)
@@ -1321,15 +1304,14 @@ int main(int argc, char **argv)
 			else
 			{
 				drawPath();
-				moveprintsize(maxy, maxx-2, workspacestring, 2);
 				if (result!=(uint32_t)-1)
 				{
 					currEntry = result;
 					offset = currEntry?currEntry-1:currEntry;
-					move(1,0);
-					cleartobot();
-					redrawentries;
 				}
+				move(1,0);
+				cleartobot();
+				redrawentries;
 			}
 		}
 		else if (keypressed>='1'&&keypressed<='4')
