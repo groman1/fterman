@@ -360,7 +360,7 @@ void drawSettings()
 			}
 			case 23:
 			{
-				moveprint(i-offset, 0, colortext[0]);
+				moveprint(i-offset, 0, colortext[1]);
 				break;
 			}
 		}
@@ -547,7 +547,7 @@ struct config_s openSettings()
 							break;
 						}
 					}
-					if (currLine-offset>=maxy)
+					if (currLine-offset>=maxy&&currLine<23)
 					{
 						++offset;
 						drawSettings();
@@ -611,7 +611,7 @@ struct config_s openSettings()
 							break;
 						}
 					}
-					if (currLine<offset)
+					if (currLine<offset+1&&currLine>0)
 					{
 						--offset;
 						drawSettings();

@@ -28,7 +28,7 @@
 
 #define UNUSED 0
 
-#define MINX 40
+#define MINX 30
 #define MINY 5
 
 #define regenerateentries\
@@ -174,6 +174,7 @@ void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIn
 {
 	move(1+offset, prefixlen);
 	uint8_t namelen = strlen(name);
+	if (currIndex==UNUSED) currIndex = namelen;
 	char *linkpath = 0;
 	if (!showsize) fileSizeLen = 0;
 	if (isasymlink)
@@ -360,9 +361,6 @@ int dirfilter(const struct dirent *entry)
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
 	stat(fullpath, &entrydata);
-
-#define MINX 40
-#define MINY 5
 	free(fullpath);
 	if (S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
@@ -392,7 +390,7 @@ entry_t *getFileList(int *qtyEntries)
 	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
 	if (n==0) goto filescan;
 
-	if (n==-1) 
+	if (n==-1)
 	{ *qtyEntries = 0; return 0; }
 	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
@@ -411,7 +409,7 @@ filescan:
 	*qtyEntries = n;
 	n = scandir(pwd, &entries, &filefilter, sortingfunction);
 
-	if (n<=0) 
+	if (*qtyEntries+n<=0)
 	{ *qtyEntries = 0; return 0; }
 	fileList = realloc(fileList, (*qtyEntries+n)*sizeof(entry_t));
 	offset = 0;
