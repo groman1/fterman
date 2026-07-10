@@ -3,7 +3,7 @@
 
 #define option_t unsigned char
 
-struct option_s
+struct config_s
 {
 	option_t goUp;
 	option_t goDown;
@@ -28,10 +28,13 @@ struct option_s
 	option_t searchtype;
 };
 
-struct option_s loadConfig();
+struct config_s loadConfig();
 void saveConfig();
 void freeConfig();
-struct option_s drawSettings();
+void drawSettings();
+struct config_s openSettings();
 char *strccat(char*, const char*);
+
+extern uint16_t maxx, maxy;
 
 #endif

@@ -28,6 +28,9 @@
 
 #define UNUSED 0
 
+#define MINX 40
+#define MINY 5
+
 #define regenerateentries\
 				if (qtyEntries) freeFileList(entries, qtyEntries);\
 				entries = getFileList(&qtyEntries);\
@@ -357,6 +360,9 @@ int dirfilter(const struct dirent *entry)
 	fullpath = strccat(pwd, entry->d_name);
 	struct stat entrydata;
 	stat(fullpath, &entrydata);
+
+#define MINX 40
+#define MINY 5
 	free(fullpath);
 	if (S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
@@ -957,7 +963,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 int qtyEntriesarr[4], currEntryarr[4], offsetarr[4];
 entry_t *entriesarr[4];
 
-uint8_t ignoreinput = 0;
+uint8_t ignoreinput = 0, isInSettings = 0;
 
 // Handles resize operations
 void resizehandler(int)
@@ -966,20 +972,25 @@ void resizehandler(int)
 	getTermXY(&maxy, &maxx);
 	--maxy;
 
-	if (maxx<40||maxy<25)
+	if (maxx<MINX||maxy<MINY)
 	{
 		ignoreinput = 1;
 		drawCentered("The terminal window is too small");
 		return;
 	}
 	ignoreinput = 0;
-	drawPath();
-	redrawentries;
+	if (!isInSettings)
+	{
+		drawPath();
+		redrawentries;
+	}
+	else
+		drawSettings();
 }
 
 int main(int argc, char **argv)
 {
-	struct option_s config = loadConfig();
+	struct config_s config = loadConfig();
 
 	currentWindow = 0;
 	sortingmethod = config.sortingmethod;
@@ -1046,7 +1057,7 @@ int main(int argc, char **argv)
 	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
 
-	if (maxx<40||maxy<25) // capped by settings window
+	if (maxx<MINX||maxy<MINY) // capped by settings window
 	{
 		ignoreinput = 1;
 		clear();
@@ -1187,9 +1198,9 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==15) // ctrl-o
 		{
-			// TODO make compatible with the resizing menu
-
-			config = drawSettings();
+			isInSettings = 1;
+			config = openSettings();
+			isInSettings = 0;
 			if (sortingmethod!=config.sortingmethod)
 			{
 				currEntry = offset = 0;
