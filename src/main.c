@@ -1,9 +1,10 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 #include <dirent.h>
 #include <signal.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -14,6 +15,8 @@
 #define pwd pwdarr[currentWindow]
 #define filter filterarr[currentWindow]
 #define pwdlen pwdlenarr[currentWindow]
+#define pathIds pathIdsarr[currentWindow]
+#define pathDepth pathDeptharr[currentWindow]
 
 #define REGFILECOLOR 1
 #define EXECCOLOR 2
@@ -28,6 +31,8 @@
 
 #define UNUSED 0
 
+#define WINDOWQTY 4 // custom quantities are not implemented, using more than 4 will result in more memory used
+
 #define MINX 30
 #define MINY 5
 
@@ -40,17 +45,14 @@
 				drawEntryCount(offset, currEntry, qtyEntries);\
 				if (qtyEntries) highlightEntry(entries[currEntry], currEntry-offset);\
 				else accessdenied();\
-				if (filter[0])\
-				{\
-					moveprint(maxy, 0, "/");\
-					moveprint(maxy, 1, filter);\
-				}\
-				moveprintsize(maxy, maxx-2, workspacestring, 2);
+				drawBottomLine();
 
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
-uint16_t maxx, maxy, pwdlenarr[4];
+uint16_t maxx, maxy, pwdlenarr[WINDOWQTY];
 int8_t keepoldFile, sortingmethod, showsize, searchtype, currentWindow;
-char *pwdarr[4], *filterarr[4], *savedpwd, *filecppwd;
+char pwdarr[WINDOWQTY][PATH_MAX], filterarr[WINDOWQTY][256], savedpwd[PATH_MAX], filecppwd[PATH_MAX];
+char *pathIdsarr[WINDOWQTY][PATH_MAX/4];
+uint16_t pathDeptharr[WINDOWQTY];
 char workspacestring[2] = "W";
 
 typedef struct
@@ -111,13 +113,44 @@ entry_t *entriesPushForward(entry_t *entries, int index, int qtyEntries)
 	return entries;
 }
 
+// Combine the *pwd* and *fname* to get a path to a file
+char *constructPath(const char *fname)
+{
+	char *ret = malloc(pwdlen+strlen(fname)+2);
+	strcpy(ret, pwd);
+	ret[pwdlen] = '/';
+	ret[pwdlen+1] = 0;
+	strcat(ret, fname);
+	return ret;
+}
+
 // Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
-void strPushfwd(char *string, int startingIndex, int stringLen) // assume string is reallocated properly
+void strPushfwd(char *string, uint16_t startingIndex, uint16_t stringLen) // assume string is reallocated properly
 {
 	for (int i = stringLen; i>startingIndex; --i)
 		string[i] = string[i-1];
 
 	string[stringLen+1] = 0;
+}
+
+// Fills some data used by the goback/enterObeject dirs
+void fillPwdData()
+{
+	pathDepth = 0;
+	for (uint16_t i = 0; pwd[i]; ++i)
+	{
+		if (pwd[i]=='/')
+		{
+			// TODO check if this ever triggers
+			if (!pwd[i+1])
+			{
+				pwd[i] = 0;
+				break;
+			}
+			pathIds[pathDepth] = pwd+i+1;
+			++pathDepth;
+		}
+	}
 }
 
 // Compares two strings but never returns 0
@@ -179,7 +212,7 @@ void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIn
 	if (!showsize) fileSizeLen = 0;
 	if (isasymlink)
 	{
-		char *fullpath = strccat(pwd, name);
+		char *fullpath = constructPath(name);
 		linkpath = realpath(fullpath, NULL);
 		free(fullpath);
 		if (linkpath==NULL)
@@ -246,23 +279,19 @@ void highlightEntry(entry_t entry, int offset)
 // Saves the current path to *savedpwd*
 void savePWD()
 {
-	free(savedpwd);
-	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
 }
 
 // Saves the path of an entry to copy/cut to *filecppwd*
 void savecpPWD(char *entry)
 {
-	free(filecppwd);
-	filecppwd = strccat(pwd, entry);
+	strcpy(filecppwd, pwd);
+	strcat(filecppwd, entry);
 }
 
 // Loads the previously saved path by savePWD() at *savedpwd*
 void loadsavedPWD()
 {
-	pwdlen = strlen(savedpwd);
-	pwd = realloc(pwd, pwdlen);
 	strcpy(pwd, savedpwd);
 }
 
@@ -296,9 +325,23 @@ void drawPath()
 	else printsize(pwd, maxx-2);
 }
 
+// Draws *text* in the centre of the screen
 void drawCentered(char *text)
 {
 	moveprint(maxy/2, maxx/2-strlen(text)/2, text);
+}
+
+// Draws the bottom bar (search and workspace string)
+void drawBottomLine()
+{
+	move(maxy, 0);
+	clearline();
+	if (*filter)
+	{
+		print("/");
+		overflowPrint(filter, strlen(filter), maxx-4, maxy-1, 1, strlen(filter));
+	}
+	moveprint(maxy, maxx-2, workspacestring);
 }
 
 // The next four functions use sortingmethod's lowest byte to determine whether to invert the result or not.
@@ -313,11 +356,11 @@ int alphabeticsort(const struct dirent **dirent1, const struct dirent **dirent2)
 int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
-	char *fullpath = strccat(pwd, (*dirent1)->d_name);
+	char *fullpath = constructPath((*dirent1)->d_name);
 	lstat(fullpath, &statstruct);
 	uint32_t size = statstruct.st_size;
 	free(fullpath);
-	fullpath = strccat(pwd, (*dirent2)->d_name);
+	fullpath = constructPath((*dirent2)->d_name);
 	lstat(fullpath, &statstruct);
 	free(fullpath);
 	return size>statstruct.st_size?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
@@ -327,11 +370,11 @@ int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
-	char *fullpath = strccat(pwd, (*dirent1)->d_name);
+	char *fullpath = constructPath((*dirent1)->d_name);
 	lstat(fullpath, &statstruct);
 	uint32_t accessedtime = statstruct.st_atime;
 	free(fullpath);
-	fullpath = strccat(pwd, (*dirent2)->d_name);
+	fullpath = constructPath((*dirent2)->d_name);
 	lstat(fullpath, &statstruct);
 	free(fullpath);
 	return accessedtime>statstruct.st_atime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
@@ -341,11 +384,11 @@ int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent
 int lastmodifiedsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
-	char *fullpath = strccat(pwd, (*dirent1)->d_name);
+	char *fullpath = constructPath((*dirent1)->d_name);
 	lstat(fullpath, &statstruct);
 	uint32_t modifiedtime = statstruct.st_mtime;
 	free(fullpath);
-	fullpath = strccat(pwd, (*dirent2)->d_name);
+	fullpath = constructPath((*dirent2)->d_name);
 	lstat(fullpath, &statstruct);
 	free(fullpath);
 	return modifiedtime>statstruct.st_mtime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
@@ -358,7 +401,7 @@ int dirfilter(const struct dirent *entry)
 
 	if (!strcasestr(entry->d_name, filter)) return 0;
 	char *fullpath;
-	fullpath = strccat(pwd, entry->d_name);
+	fullpath = constructPath(entry->d_name);
 	struct stat entrydata;
 	stat(fullpath, &entrydata);
 	free(fullpath);
@@ -371,7 +414,7 @@ int filefilter(const struct dirent *entry)
 {
 	if (!strcasestr(entry->d_name, filter)) return 0;
 	char *fullpath;
-	fullpath = strccat(pwd, entry->d_name);
+	fullpath = constructPath(entry->d_name);
 	struct stat entrydata;
 	stat(fullpath, &entrydata);
 	free(fullpath);
@@ -395,7 +438,7 @@ entry_t *getFileList(int *qtyEntries)
 	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
 	{
-		fileName = strccat(pwd, entries[i]->d_name);
+		fileName = constructPath(entries[i]->d_name);
 		lstat(fileName, &fileList[i-offset].data);
 		free(fileName);
 		currLength = strlen(entries[i]->d_name);
@@ -416,7 +459,7 @@ filescan:
 
 	for (int i = 0; i<n; ++i)
 	{
-		fileName = strccat(pwd, entries[i]->d_name);
+		fileName = constructPath(entries[i]->d_name);
 		lstat(fileName, &fileList[i-offset+*qtyEntries].data);
 		free(fileName);
 		currLength = strlen(entries[i]->d_name);
@@ -445,7 +488,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 {
 	move(1,0);
 	int currPair;
-	for (int i = offset; i<qtyEntries&&i-offset<maxy-2; ++i)
+	for (int i = offset; i<qtyEntries&&i-offset<maxy-1; ++i)
 	{
 		if (S_ISDIR(entries[i].data.st_mode)) currPair = DIRECTORYCOLOR;
 		else if (S_ISLNK(entries[i].data.st_mode)) currPair = SYMLINKCOLOR;
@@ -466,23 +509,32 @@ void accessdenied()
 	moveprint(1, 0, "No files found");
 }
 
+uint8_t invalidate = 1;
+
 // Removes the last directory from *pwd* and copies the removed string to *backpath*
-char *goback(char *backpath)
+char *goback()
 {
-	filter = realloc(filter, 1);
 	filter[0] = 0;
-	int i;
-	for (i = pwdlen-2; pwd[i]!='/'; --i);
-	backpath = realloc(backpath, pwdlen-++i);
-	for (int x = 0; x<pwdlen-i-1; ++x)
+	invalidate = 0;
+	--pathDepth;
+	pwdlen -= strlen(pathIds[pathDepth])+1;
+	*(pathIds[pathDepth]-1) = 0;
+	if (!*pwd)
 	{
-		backpath[x] = pwd[i+x];
-		pwd[i+x] = 0;
+		*pwd = '/';
+		*(pwd+1) = 0;
 	}
-	backpath[pwdlen-i-1] = 0;
-	pwdlen = i;
-	pwd = realloc(pwd, pwdlen+1);
-	return backpath;
+	return pathIds[pathDepth];
+}
+
+// Attempts to find entry with name *entryname* in *entries* with length *qtyEntries*
+int findentry(char *entryname, entry_t *entries, int qtyEntries)
+{
+	for (int i = 0; i<qtyEntries; ++i)
+	{
+		if (!strcmp(entries[i].name, entryname)) return i;
+	}
+	return -1;
 }
 
 // Checks if the entry ( *entries[*entryID]* ) is a file, link or directory. If it is a link, determines whether the link is pointing to a file or a directory. In both cases, if entry is a directory, opens it and gets the file list there. If entry is a file, opens it in a file editor determined by environment variable EDITOR
@@ -492,33 +544,63 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 	if (S_ISLNK(entries[*entryID].data.st_mode))
 	{
 		char *fullpwd;
-		fullpwd = strccat(pwd, entries[*entryID].name);
+		fullpwd = constructPath(entries[*entryID].name);
 		stat(fullpwd, &tempstat);
 		free(fullpwd);
 	}
 	else
-	{
 		tempstat = entries[*entryID].data;
-	}
-	if (!*qtyEntries) return entries;
+
 	if (S_ISDIR(tempstat.st_mode))
 	{
-		pwd = realloc(pwd, pwdlen+strlen(entries[*entryID].name)+2);
-		for (int i = 0; entries[*entryID].name[i]; ++i)
+		*filter = 0;
+		pwd[pwdlen] = '/';
+
+		int newQtyEntries;
+		entry_t *newentries = 0;
+
+		if (pathIds[pathDepth]&&!strcmp(pathIds[pathDepth], entries[*entryID].name)&&!invalidate)
 		{
-			pwd[pwdlen++] = entries[*entryID].name[i];
+			pwdlen += strlen(entries[*entryID].name)+1;
+			newentries = getFileList(&newQtyEntries);
+			if (pathIds[pathDepth+1])
+			{
+				*entryID = findentry(pathIds[pathDepth+1], newentries, newQtyEntries);
+				if (*entryID==-1) ++*entryID;
+				// TESTING
+				*offset = *entryID?((*entryID-*entryID%(maxy-1)>newQtyEntries-(maxy-1))?newQtyEntries-(maxy-1):*entryID-1):*entryID;
+			}
+			else
+			{
+				invalidate = 1;
+				*entryID = 0;
+				*offset = 0;
+			}
 		}
-		pwd[pwdlen++] = '/';
-		pwd[pwdlen] = 0;
+		else
+		{
+			pathIds[pathDepth] = pwd+pwdlen+1;
+			pathIds[pathDepth+1] = 0;
+			strcpy(pathIds[pathDepth], entries[*entryID].name);
+			pwdlen += strlen(entries[*entryID].name)+1;
+			invalidate = 1;
+			*entryID = 0;
+			*offset = 0;
+			newentries = getFileList(&newQtyEntries);
+		}
+		++pathDepth;
+
 		freeFileList(entries, *qtyEntries);
-		entries = getFileList(qtyEntries);
+		entries = newentries;
+		*qtyEntries = newQtyEntries;
+
 		if (*qtyEntries)
 		{
 			clear();
 			drawPath();
-			drawObjects(entries, 0, *qtyEntries);
-			drawEntryCount(0, 0, *qtyEntries);
-			if (*qtyEntries) highlightEntry(entries[0], 0);
+			drawObjects(entries, *offset, *qtyEntries);
+			drawEntryCount(*offset, *entryID, *qtyEntries);
+			if (*qtyEntries) highlightEntry(entries[*entryID], *entryID-*offset);
 		}
 		else
 		{
@@ -526,12 +608,10 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 			drawPath();
 			accessdenied();
 		}
-		*entryID = 0;
-		*offset = 0;
 	}
 	else if (tempstat.st_mode&S_IXUSR)
 	{
-		char *fullpath = strccat(pwd, entries[*entryID].name);
+		char *fullpath = constructPath(entries[*entryID].name);
 		deinit();
 		pid_t pid = fork();
 
@@ -554,7 +634,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		char *editor = getenv("EDITOR");
 		if (!editor) return entries; // EDITOR environment variable has to be set in order for this to work
 		deinit();
-		char *args = strccat(pwd, entries[*entryID].name);
+		char *args = constructPath(entries[*entryID].name);
 		deinit();
 		pid_t pid = fork();
 
@@ -575,7 +655,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 // Deletes a file at *pwd* + *file*
 void deleteFile(char *file)
 {
-	char *fullpath = strccat(pwd, file);
+	char *fullpath = constructPath(file);
 	pid_t pid = fork();
 	if (pid==0)
 	{
@@ -586,6 +666,7 @@ void deleteFile(char *file)
 }
 
 // Provides inline text editing with inline right/left movement for functions *editfname* and *createEntry*
+// TODO implement an argument for returning static array
 char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t colorpair)
 {
 	char *text;
@@ -708,27 +789,14 @@ void editfname(entry_t *entry, int offset)
 		return;
 	}
 
-	char *oldpath = strccat(pwd, oldname);
-	char *newpath = strccat(pwd, entry->name);
+	char *oldpath = constructPath(oldname);
+	char *newpath = constructPath(entry->name);
 
-	pid_t pid = fork();
-	if (pid==0) exit(execlp("mv", "mv", oldpath, newpath, (char*)0));
-
-	while(wait(0)!=-1);
+	rename(oldpath, newpath);
 
 	free(oldname);
 	free(oldpath);
 	free(newpath);
-}
-
-// Attempts to find entry with name *entryname* in *entries* with length *qtyEntries*
-int findentry(char *entryname, entry_t *entries, int qtyEntries)
-{
-	for (int i = 0; i<qtyEntries; ++i)
-	{
-		if (!strcmp(entries[i].name, entryname)) return i;
-	}
-	return -1;
 }
 
 // Opens search menu, sets *filter* to the phrase entered
@@ -739,8 +807,6 @@ void search()
 	uint8_t filterlen = strlen(filter), keypressed, currIndex;
 	currIndex = filterlen;
 
-	char workspacestring[2] = "W";
-	workspacestring[1] = currentWindow+49;
 	moveprintsize(maxy, maxx-2, workspacestring, 2);
 	moveprint(maxy, 0, "/");
 	overflowPrint(filter, filterlen, maxx-4, maxy-1, 1, currIndex);
@@ -753,7 +819,6 @@ void search()
 			{ 
 				if (filterlen<255)
 				{
-					filter = realloc(filter, filterlen+2); 
 					if (filterlen!=currIndex) strPushfwd(filter, currIndex, filterlen);
 					++filterlen;
 					filter[currIndex++] = keypressed;
@@ -772,7 +837,6 @@ void search()
 				if (currIndex)
 				{
 					strPushback(filter, --currIndex);
-					filter = realloc(filter, filterlen--); 
 					move(maxy, 0);
 					clearline();
 					moveprint(maxy, 0, "/");
@@ -790,7 +854,6 @@ void search()
 			case 3:
 			{
 				if (qtyEntries&&searchtype) freeFileList(entries, qtyEntries);
-				filter = realloc(filter, 1);
 				*filter = 0;
 				setcursor(0);
 				return;
@@ -871,7 +934,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	}
 
 	pid_t pid = fork();
-	char *fullpath = strccat(pwd, fname);
+	char *fullpath = constructPath(fname);
 	if (pid==0)
 	{
 		if (isdir)
@@ -958,8 +1021,8 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 #define qtyEntries qtyEntriesarr[currentWindow]
 #define entries entriesarr[currentWindow]
 
-int qtyEntriesarr[4], currEntryarr[4], offsetarr[4];
-entry_t *entriesarr[4];
+int qtyEntriesarr[WINDOWQTY], currEntryarr[WINDOWQTY], offsetarr[WINDOWQTY];
+entry_t *entriesarr[WINDOWQTY];
 
 uint8_t ignoreinput = 0, isInSettings = 0;
 
@@ -1003,8 +1066,7 @@ int main(int argc, char **argv)
 		{
 			pwdlen = strlen(argv[1]);
 			if (argv[1][pwdlen-1]=='/') --pwdlen;
-			pwd = malloc(pwdlen+2);
-			strcpy(pwd, argv[1]);
+			strncpy(pwd, argv[1], pwdlen);
 		}
 		else
 		{
@@ -1014,10 +1076,11 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		pwd = getcwd(0,0);
+		getcwd(pwd, PATH_MAX);
 		pwdlen = strlen(pwd);
-		pwd = realloc(pwd, pwdlen+2);
 	}
+
+	fillPwdData();
 
 	initcolorpair(7, BLACK, GREEN);
 	getTermXY(&maxy, &maxx);
@@ -1025,17 +1088,12 @@ int main(int argc, char **argv)
 	--maxy; // to fit the search bar
 
 	uint8_t keypressed, windowsInitialised = 1, windowstatus = 0, cutfromwindow = 0;
-	pwd[pwdlen++] = '/';
-	pwd[pwdlen] = 0;
-	savedpwd = malloc(pwdlen+1);
 	strcpy(savedpwd, pwd);
 
-	char *backpwdarr[4];
-	for (int i = 0; i<4; ++i)
+	char *backpwdarr[WINDOWQTY];
+	for (int i = 0; i<WINDOWQTY; ++i)
 	{
-		filterarr[i] = malloc(1);
 		filterarr[i][0] = 0;
-		backpwdarr[i] = NULL;
 		currEntryarr[i] = 0;
 		offsetarr[i] = 0;
 		qtyEntriesarr[i] = 0;
@@ -1062,6 +1120,7 @@ int main(int argc, char **argv)
 		drawCentered("The terminal window is too small");
 	}
 
+
 	const struct sigaction sa = {.sa_handler = resizehandler, .sa_flags = SA_RESTART};
 
 	sigaction(SIGWINCH, &sa, NULL);
@@ -1084,7 +1143,7 @@ int main(int argc, char **argv)
 			{ 
 				deHighlightEntry(entries[currEntry], currEntry-offset); 
 				++currEntry; 
-				if (currEntry-offset>maxy-4&&currEntry<qtyEntries-1)
+				if (currEntry-offset>maxy-3&&currEntry<qtyEntries-1)
 				{
 					++offset;
 					drawObjects(entries, offset, qtyEntries);
@@ -1125,7 +1184,7 @@ int main(int argc, char **argv)
 				drawPath();
 				drawObjects(entries, offset, qtyEntries); 
 				drawEntryCount(offset, currEntry, qtyEntries);
-				moveprintsize(maxy, maxx-2, workspacestring, 2);
+				drawBottomLine();
 				highlightEntry(entries[currEntry], currEntry-offset); 
 			}
 		}
@@ -1148,15 +1207,15 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.goBack)
 		{
-			if (pwdlen>1)
+			if (pathDepth)
 			{
-				backpwd = goback(backpwd);
+				backpwd = goback();
 				clear();
 				drawPath();
 				regenerateentries;
 				currEntry = findentry(backpwd, entries, qtyEntries);
 				if (currEntry==-1) currEntry = 0;
-				offset = currEntry?currEntry-1:currEntry;
+				offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
 				redrawentries;
 			}	
 		}
@@ -1257,7 +1316,6 @@ int main(int argc, char **argv)
 		{
 			currEntry = 0;
 			offset = 0;
-			filter = realloc(filter, 1);
 			filter[0] = 0;
 			clear();
 			drawPath();
@@ -1272,7 +1330,7 @@ int main(int argc, char **argv)
 			{
 				entries = tempentries;
 				currEntry = result;
-				offset = currEntry?currEntry-1:currEntry;
+				offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
 				++qtyEntries;
 				
 				clear();
@@ -1283,11 +1341,10 @@ int main(int argc, char **argv)
 			else
 			{
 				drawPath();
-				moveprintsize(maxy, maxx-2, workspacestring, 2);
 				if (result!=(uint32_t)-1)
 				{
 					currEntry = result;
-					offset = currEntry?currEntry-1:currEntry;
+					offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
 				}
 				move(1,0);
 				cleartobot();
@@ -1302,7 +1359,7 @@ int main(int argc, char **argv)
 			{
 				entries = tempentries;
 				currEntry = result;
-				offset = currEntry?currEntry-1:currEntry;
+				offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
 				++qtyEntries;
 				
 				clear();
@@ -1316,7 +1373,7 @@ int main(int argc, char **argv)
 				if (result!=(uint32_t)-1)
 				{
 					currEntry = result;
-					offset = currEntry?currEntry-1:currEntry;
+					offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
 				}
 				move(1,0);
 				cleartobot();
@@ -1329,9 +1386,9 @@ int main(int argc, char **argv)
 			currentWindow = keypressed-49;
 			if (!((windowsInitialised>>currentWindow)&1))
 			{
-				pwd = malloc(strlen(pwdarr[lastwindow])+1);
 				strcpy(pwd, pwdarr[lastwindow]);
 				pwdlen = pwdlenarr[lastwindow];
+				fillPwdData();
 				windowsInitialised|=1<<currentWindow;
 				regenerateentries;
 			}
@@ -1347,18 +1404,11 @@ int main(int argc, char **argv)
 		}
 	}
 
-	for (int i = 0; i<4; ++i)
+	for (int i = 0; i<WINDOWQTY; ++i)
 	{
 		if ((windowsInitialised>>i)&1)
-		{
-			free(pwdarr[i]);
-			if (backpwdarr[i]) free(backpwdarr[i]);
 			freeFileList(entriesarr[i], qtyEntriesarr[i]);
-		}
-		free(filterarr[i]);
 	}
-	free(savedpwd);
-	free(filecppwd);
 	freeConfig();
 	setcursor(1);
 	deinit();

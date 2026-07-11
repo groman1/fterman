@@ -1,7 +1,7 @@
 PROGNAME := fterman
 
-CFLAGS := -Wall -Werror -Wextra -Wno-unused-but-set-parameter
-LDFLAGS := 
+CFLAGS := -Wall -Werror -Wextra -Wno-unused-but-set-parameter -Wno-array-bounds -Wno-restrict
+LDFLAGS :=
 
 RM := rm -f
 INSTALL := install

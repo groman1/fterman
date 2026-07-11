@@ -17,7 +17,7 @@ void initcolorpair(uint8_t id, uint8_t foreground, uint8_t background)
 void init()
 {
 	tcgetattr(STDIN_FILENO, &originalterminal);
-	struct termios terminal;
+	struct termios terminal = originalterminal;
 	cfmakeraw(&terminal);
 	tcsetattr(STDIN_FILENO, 0, &terminal);
 	initcolorpair(0, WHITE, BLACK);
