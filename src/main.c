@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <limits.h>
 #include <sys/stat.h>
@@ -11,6 +12,7 @@
 
 #include "rawtui.h"
 #include "settings.h"
+#include "futils.h"
 
 #define pwd pwdarr[currentWindow]
 #define filter filterarr[currentWindow]
@@ -114,14 +116,12 @@ entry_t *entriesPushForward(entry_t *entries, int index, int qtyEntries)
 }
 
 // Combine the *pwd* and *fname* to get a path to a file
-char *constructPath(const char *fname)
+void constructPath(const char *fname, char *ret)
 {
-	char *ret = malloc(pwdlen+strlen(fname)+2);
 	strcpy(ret, pwd);
 	ret[pwdlen] = '/';
 	ret[pwdlen+1] = 0;
 	strcat(ret, fname);
-	return ret;
 }
 
 // Frees up space for a character at *startingIndex* by pushing *string* forward, starting at *startingIndex* and finishing at *stringLen*
@@ -213,9 +213,9 @@ void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIn
 	if (!showsize) fileSizeLen = 0;
 	if (isasymlink)
 	{
-		char *fullpath = constructPath(name);
+		char fullpath[PATH_MAX];
+		constructPath(name, fullpath);
 		linkpath = realpath(fullpath, NULL);
-		free(fullpath);
 		if (linkpath==NULL)
 		{
 			wrcolorpair(BROKENSYMLINKCOLOR);
@@ -283,10 +283,15 @@ void savePWD()
 	strcpy(savedpwd, pwd);
 }
 
+uint16_t entryoffset;
+
 // Saves the path of an entry to copy/cut to *filecppwd*
 void savecpPWD(char *entry)
 {
 	strcpy(filecppwd, pwd);
+	entryoffset = pwdlen+1;
+	filecppwd[pwdlen] = '/';
+	filecppwd[pwdlen+1] = 0;
 	strcat(filecppwd, entry);
 }
 
@@ -297,14 +302,10 @@ void loadsavedPWD()
 }
 
 // Copies (*keepoldFile* = 1) or cuts (*keepoldFile* = 0) the file from *filecppwd* to *pwd*
-void copycutFile(int keepoldFile)
+void copycutFile()
 {
-	pid_t pid = fork();
-
-	if (keepoldFile&&pid==0) exit(execlp("cp", "cp", "-r", filecppwd, pwd, (char*)0));
-	else if (!keepoldFile&&pid==0) exit(execlp("mv", "mv", filecppwd, pwd, (char*)0));
-
-	while(wait(0)!=-1);
+	if (copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile))// TODO handle errors
+		raise(SIGTRAP); // temp for debugging
 }
 
 // Draws the top-right status line (current entry, offset, etc)
@@ -322,7 +323,7 @@ void drawPath()
 {
 	move(0,0);
 	clearline();
-	if (pwdlen==1) print(pwd);
+	if (pwdlen==1) printc('/');
 	if (pwdlen-1<maxx) print(pwd+1);
 	else printsize(pwd+1, maxx-2);
 }
@@ -358,13 +359,12 @@ int alphabeticsort(const struct dirent **dirent1, const struct dirent **dirent2)
 int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
-	char *fullpath = constructPath((*dirent1)->d_name);
+	char fullpath[PATH_MAX+1];
+	constructPath((*dirent1)->d_name, fullpath);
 	lstat(fullpath, &statstruct);
 	uint32_t size = statstruct.st_size;
-	free(fullpath);
-	fullpath = constructPath((*dirent2)->d_name);
+	constructPath((*dirent2)->d_name, fullpath);
 	lstat(fullpath, &statstruct);
-	free(fullpath);
 	return size>statstruct.st_size?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
@@ -372,13 +372,12 @@ int sizesort(const struct dirent **dirent1, const struct dirent **dirent2)
 int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
-	char *fullpath = constructPath((*dirent1)->d_name);
+	char fullpath[PATH_MAX+1];
+	constructPath((*dirent1)->d_name, fullpath);
 	lstat(fullpath, &statstruct);
 	uint32_t accessedtime = statstruct.st_atime;
-	free(fullpath);
-	fullpath = constructPath((*dirent2)->d_name);
+	constructPath((*dirent2)->d_name, fullpath);
 	lstat(fullpath, &statstruct);
-	free(fullpath);
 	return accessedtime>statstruct.st_atime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
@@ -386,13 +385,12 @@ int lastaccessedsort(const struct dirent **dirent1, const struct dirent **dirent
 int lastmodifiedsort(const struct dirent **dirent1, const struct dirent **dirent2)
 {
 	struct stat statstruct;
-	char *fullpath = constructPath((*dirent1)->d_name);
+	char fullpath[PATH_MAX+1];
+	constructPath((*dirent1)->d_name, fullpath);
 	lstat(fullpath, &statstruct);
 	uint32_t modifiedtime = statstruct.st_mtime;
-	free(fullpath);
-	fullpath = constructPath((*dirent2)->d_name);
+	constructPath((*dirent2)->d_name, fullpath);
 	lstat(fullpath, &statstruct);
-	free(fullpath);
 	return modifiedtime>statstruct.st_mtime?1-(sortingmethod&1)*2:-1+(sortingmethod&1)*2;
 }
 
@@ -402,11 +400,10 @@ int dirfilter(const struct dirent *entry)
 	if (entry->d_name[0]=='.'&&(entry->d_name[1]==0||(entry->d_name[1]=='.'&&entry->d_name[2]==0))) return 0;
 
 	if (!strcasestr(entry->d_name, filter)) return 0;
-	char *fullpath;
-	fullpath = constructPath(entry->d_name);
+	char fullpath[PATH_MAX+1];
+	constructPath(entry->d_name, fullpath);
 	struct stat entrydata;
 	stat(fullpath, &entrydata);
-	free(fullpath);
 	if (S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
 }
@@ -415,11 +412,10 @@ int dirfilter(const struct dirent *entry)
 int filefilter(const struct dirent *entry)
 {
 	if (!strcasestr(entry->d_name, filter)) return 0;
-	char *fullpath;
-	fullpath = constructPath(entry->d_name);
+	char fullpath[PATH_MAX+1];
+	constructPath(entry->d_name, fullpath);
 	struct stat entrydata;
 	stat(fullpath, &entrydata);
-	free(fullpath);
 	if (!S_ISDIR(entrydata.st_mode)) return 1;
 	return 0;
 }
@@ -427,7 +423,7 @@ int filefilter(const struct dirent *entry)
 // Gets the file list using scandir(), returning them as return value and returning the quanitity of them as *qtyEntries*
 entry_t *getFileList(int *qtyEntries)
 {
-	char *fileName;
+	char fileName[PATH_MAX+1];
 	entry_t *fileList = 0;
 	int currLength, offset = 0; // offset is the number of "." and ".." currently found
 	struct dirent **entries;
@@ -440,9 +436,8 @@ entry_t *getFileList(int *qtyEntries)
 	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
 	{
-		fileName = constructPath(entries[i]->d_name);
+		constructPath(entries[i]->d_name, fileName);
 		lstat(fileName, &fileList[i-offset].data);
-		free(fileName);
 		currLength = strlen(entries[i]->d_name);
 		fileList[i-offset].name = malloc(currLength+1);
 		for (int x = 0; x<=currLength; fileList[i-offset].name[x] = entries[i]->d_name[x], ++x);
@@ -461,9 +456,8 @@ filescan:
 
 	for (int i = 0; i<n; ++i)
 	{
-		fileName = constructPath(entries[i]->d_name);
+		constructPath(entries[i]->d_name, fileName);
 		lstat(fileName, &fileList[i-offset+*qtyEntries].data);
-		free(fileName);
 		currLength = strlen(entries[i]->d_name);
 		fileList[i-offset+*qtyEntries].name = malloc(currLength+1);
 		for (int x = 0; x<=currLength; fileList[i-offset+*qtyEntries].name[x] = entries[i]->d_name[x], ++x);
@@ -545,10 +539,9 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 	struct stat tempstat;
 	if (S_ISLNK(entries[*entryID].data.st_mode))
 	{
-		char *fullpwd;
-		fullpwd = constructPath(entries[*entryID].name);
+		char fullpwd[PATH_MAX];
+		constructPath(entries[*entryID].name, fullpwd);
 		stat(fullpwd, &tempstat);
-		free(fullpwd);
 	}
 	else
 		tempstat = entries[*entryID].data;
@@ -570,7 +563,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 				*entryID = findentry(pathIds[pathDepth+1], newentries, newQtyEntries);
 				if (*entryID==-1) ++*entryID;
 				// TESTING
-				*offset = *entryID?((*entryID-*entryID%(maxy-1)>newQtyEntries-(maxy-1))?newQtyEntries-(maxy-1):*entryID-1):*entryID;
+				*offset = *entryID?((*entryID-*entryID%(maxy-1)>newQtyEntries-(maxy-1)&&*entryID>maxy)?newQtyEntries-(maxy-1):*entryID-1):*entryID;
 			}
 			else
 			{
@@ -613,7 +606,8 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 	}
 	else if (tempstat.st_mode&S_IXUSR)
 	{
-		char *fullpath = constructPath(entries[*entryID].name);
+		char fullpath[PATH_MAX+1];
+		constructPath(entries[*entryID].name, fullpath);
 		deinit();
 		pid_t pid = fork();
 
@@ -621,7 +615,6 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		{
 			exit(execl(fullpath, fullpath, (char*)0));
 		}
-		free(fullpath);
 		while(wait(0)!=-1);
 		init();
 		setcursor(0);
@@ -636,12 +629,12 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		char *editor = getenv("EDITOR");
 		if (!editor) return entries; // EDITOR environment variable has to be set in order for this to work
 		deinit();
-		char *args = constructPath(entries[*entryID].name);
+		char args[PATH_MAX+1];
+		constructPath(entries[*entryID].name, args);
 		deinit();
 		pid_t pid = fork();
 
 		if (pid==0) exit(execlp(editor, editor, args, (char*)0));
-		free(args);
 		while(wait(0)!=-1);
 		init();
 		setcursor(0);
@@ -657,14 +650,10 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 // Deletes a file at *pwd* + *file*
 void deleteFile(char *file)
 {
-	char *fullpath = constructPath(file);
-	pid_t pid = fork();
-	if (pid==0)
-	{
-		exit(execlp("rm", "rm", "-rf", fullpath, (char*)0));
-	}
-	while(wait(0)!=-1);
-	free(fullpath);
+	char fullpath[PATH_MAX+1];
+	constructPath(file, fullpath);
+	if (removeEntry(fullpath)) // TODO error handling
+		raise(SIGTRAP);
 }
 
 // Provides inline text editing with inline right/left movement for functions *editfname* and *createEntry*
@@ -791,14 +780,13 @@ void editfname(entry_t *entry, int offset)
 		return;
 	}
 
-	char *oldpath = constructPath(oldname);
-	char *newpath = constructPath(entry->name);
+	char oldpath[PATH_MAX+1], newpath[PATH_MAX+1];
+	constructPath(oldname, oldpath);
+	constructPath(entry->name, newpath);
 
 	rename(oldpath, newpath);
 
 	free(oldname);
-	free(oldpath);
-	free(newpath);
 }
 
 // Opens search menu, sets *filter* to the phrase entered
@@ -935,17 +923,12 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 		}
 	}
 
-	pid_t pid = fork();
-	char *fullpath = constructPath(fname);
-	if (pid==0)
-	{
-		if (isdir)
-			exit(execlp("mkdir", "mkdir", fullpath, (char*)0));
-		else
-			exit(execlp("touch", "touch", fullpath, (char*)0));
-	}
-
-	while(wait(0)==-1);
+	char fullpath[PATH_MAX+1];
+	constructPath(fname, fullpath);
+	if (isdir) // TODO? error checking
+		mkdir(fullpath, 0755);
+	else
+		close(creat(fullpath, 0644));
 
 	uint32_t index = 0;
 
@@ -1009,7 +992,6 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	stat(fullpath, &entries[index].data);
 
 	free(fname);
-	free(fullpath);
 
 	*result = index;
 
@@ -1293,7 +1275,7 @@ int main(int argc, char **argv)
 		{
 			if (keepoldFile!=-1)
 			{
-				copycutFile(keepoldFile);
+				copycutFile();
 				regenerateentries;
 				redrawentries;
 			}

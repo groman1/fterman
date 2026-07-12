@@ -251,7 +251,5 @@ void moveprint(uint16_t y, uint16_t x, char *string)
 
 void printc(char c)
 {
-	char s[2];
-	s[0] = c;
-	print(s);
+	write(STDOUT_FILENO, &c, 1);
 }
