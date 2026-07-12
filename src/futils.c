@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "direnum.h"
-#include <signal.h>
 
 uint8_t copyFile(char *src, char *dest, char *fname)
 {
@@ -19,7 +18,6 @@ uint8_t copyFile(char *src, char *dest, char *fname)
 	int srcFd = open(src, O_RDONLY, 0);
 
 	int destFd = open(dest, O_CREAT|O_WRONLY, 0644);
-	if (destFd<0) raise(SIGTRAP);
 	src[srcLen] = 0;
 	dest[destLen] = 0;
 	if (destFd<0) return 1;
@@ -124,7 +122,6 @@ uint8_t removeEntry(char *path)
 	return 0;
 errorremove:
 	path[pathLen] = 0;
-	raise(SIGTRAP);
 	closeDir();
 	return 1;
 }
@@ -197,7 +194,6 @@ uint8_t copymove(char *src, char *dest, char *fname, uint8_t move)
 	return 0;
 
 errordir:
-	raise(SIGTRAP);
 	src[srcLen] = 0;
 	closeDir();
 	return 1;

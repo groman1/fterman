@@ -304,8 +304,7 @@ void loadsavedPWD()
 // Copies (*keepoldFile* = 1) or cuts (*keepoldFile* = 0) the file from *filecppwd* to *pwd*
 void copycutFile()
 {
-	if (copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile))// TODO handle errors
-		raise(SIGTRAP); // temp for debugging
+	copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile);// TODO handle errors
 }
 
 // Draws the top-right status line (current entry, offset, etc)
@@ -929,6 +928,16 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 		mkdir(fullpath, 0755);
 	else
 		close(creat(fullpath, 0644));
+
+	if (!entries) //empty dir
+	{
+		entries = malloc(sizeof(entry_t));
+		entries[0].name = malloc(strlen(fname)+1);
+		strcpy(entries[0].name, fname);
+		stat(fullpath, &entries[0].data);
+		*result = 0;
+		return entries;
+	}
 
 	uint32_t index = 0;
 
