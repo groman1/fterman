@@ -50,7 +50,7 @@
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
 uint16_t maxx, maxy, pwdlenarr[WINDOWQTY];
 int8_t keepoldFile, sortingmethod, showsize, searchtype, currentWindow;
-char pwdarr[WINDOWQTY][PATH_MAX], filterarr[WINDOWQTY][256], savedpwd[PATH_MAX], filecppwd[PATH_MAX];
+char pwdarr[WINDOWQTY][PATH_MAX+1], filterarr[WINDOWQTY][256], savedpwd[PATH_MAX+1], filecppwd[PATH_MAX+1];
 char *pathIdsarr[WINDOWQTY][PATH_MAX/4];
 uint16_t pathDeptharr[WINDOWQTY];
 char workspacestring[2] = "W";
@@ -133,7 +133,7 @@ void strPushfwd(char *string, uint16_t startingIndex, uint16_t stringLen) // ass
 	string[stringLen+1] = 0;
 }
 
-// Fills some data used by the goback/enterObeject dirs
+// Fills some data used by the goback/enterObject dirs
 void fillPwdData()
 {
 	pathDepth = 0;
@@ -144,6 +144,7 @@ void fillPwdData()
 			// TODO check if this ever triggers
 			if (!pwd[i+1])
 			{
+				--pwdlen;
 				pwd[i] = 0;
 				break;
 			}
@@ -321,8 +322,9 @@ void drawPath()
 {
 	move(0,0);
 	clearline();
-	if (pwdlen<maxx) print(pwd);
-	else printsize(pwd, maxx-2);
+	if (pwdlen==1) print(pwd);
+	if (pwdlen-1<maxx) print(pwd+1);
+	else printsize(pwd+1, maxx-2);
 }
 
 // Draws *text* in the centre of the screen
@@ -519,7 +521,7 @@ char *goback()
 	--pathDepth;
 	pwdlen -= strlen(pathIds[pathDepth])+1;
 	*(pathIds[pathDepth]-1) = 0;
-	if (!*pwd)
+	if (!pwd[1])
 	{
 		*pwd = '/';
 		*(pwd+1) = 0;
@@ -1059,15 +1061,14 @@ int main(int argc, char **argv)
 	searchtype = config.searchtype;
 	setSortingFunction();
 
+	pwd[0] = '/';
+
 	if (argc>1)
 	{
 		struct stat tempstat;
-		if (!stat(argv[1], &tempstat)&&S_ISDIR(tempstat.st_mode))
-		{
-			pwdlen = strlen(argv[1]);
-			if (argv[1][pwdlen-1]=='/') --pwdlen;
-			strncpy(pwd, argv[1], pwdlen);
-		}
+		realpath(argv[1], pwd+1);
+		if (!stat(pwd, &tempstat)&&S_ISDIR(tempstat.st_mode))
+			pwdlen = strlen(pwd);
 		else
 		{
 			print("Invalid path\n");
@@ -1076,7 +1077,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-		getcwd(pwd, PATH_MAX);
+		getcwd(pwd+1, PATH_MAX);
 		pwdlen = strlen(pwd);
 	}
 
