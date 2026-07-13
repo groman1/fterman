@@ -118,9 +118,8 @@ entry_t *entriesPushForward(entry_t *entries, int index, int qtyEntries)
 // Combine the *pwd* and *fname* to get a path to a file
 void constructPath(const char *fname, char *ret)
 {
-	strcpy(ret, pwd);
-	ret[pwdlen] = '/';
-	ret[pwdlen+1] = 0;
+	strcpy(ret, pwd+(pwd[1]!=0));
+	strcat(ret, "/");
 	strcat(ret, fname);
 }
 
@@ -1295,6 +1294,8 @@ int main(int argc, char **argv)
 			{
 				copycutFile();
 				regenerateentries;
+				currEntry = findentry(filecppwd+entryoffset, entries, qtyEntries);
+				offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
 				redrawentries;
 			}
 			if (keepoldFile==0)

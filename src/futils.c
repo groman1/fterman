@@ -9,15 +9,20 @@
 
 uint8_t copyFile(char *src, char *dest, char *fname)
 {
+	struct stat statBuf;
 	int srcLen = strlen(src), destLen = strlen(dest);
-	src[srcLen] = '/';
-	dest[destLen] = '/';
-	strcpy(src+srcLen+1, fname);
-	strcpy(dest+destLen+1, fname);
+	if (fname)
+	{
+		src[srcLen] = '/';
+		dest[destLen] = '/';
+		strcpy(src+srcLen+1, fname);
+		strcpy(dest+destLen+1, fname);
+	}
 
 	int srcFd = open(src, O_RDONLY, 0);
+	fstat(srcFd, &statBuf);
 
-	int destFd = open(dest, O_CREAT|O_WRONLY, 0644);
+	int destFd = open(dest, O_CREAT|O_WRONLY|O_TRUNC, statBuf.st_mode&0777);
 	src[srcLen] = 0;
 	dest[destLen] = 0;
 	if (destFd<0) return 1;
@@ -35,17 +40,20 @@ uint8_t copyFile(char *src, char *dest, char *fname)
 uint8_t moveFile(char *src, char *dest, char *fname)
 {
 	int srcLen = strlen(src), destLen = strlen(dest);
-	src[srcLen] = '/';
-	dest[destLen] = '/';
-	strcpy(src+srcLen+1, fname);
-	strcpy(dest+destLen+1, fname);
+	if (fname)
+	{
+		src[srcLen] = '/';
+		dest[destLen] = '/';
+		strcpy(src+srcLen+1, fname);
+		strcpy(dest+destLen+1, fname);
+	}
 
 	if (!link(src, dest))
 	{
 		unlink(src);
 		return 0;
 	}
-	if (copyFile(src, dest, "")) return 1;
+	if (copyFile(src, dest, 0)) return 1;
 	unlink(src);
 
 	src[srcLen] = 0;
@@ -140,12 +148,12 @@ uint8_t copymove(char *src, char *dest, char *fname, uint8_t move)
 	{
 		if (move)
 		{
-			if (moveFile(src, destPath, "")) return 1;
+			if (moveFile(src, destPath, 0))
 				return 1;
 		}
 		else
 		{
-			if (copyFile(src, destPath, "")) return 1;
+			if (copyFile(src, destPath, 0))
 				return 1;
 		}
 	}
