@@ -141,13 +141,6 @@ void fillPwdData()
 	{
 		if (pwd[i]=='/')
 		{
-			// TODO check if this ever triggers
-			if (!pwd[i+1])
-			{
-				--pwdlen;
-				pwd[i] = 0;
-				break;
-			}
 			pathIds[pathDepth] = pwd+i+1;
 			++pathDepth;
 		}
@@ -301,10 +294,20 @@ void loadsavedPWD()
 	strcpy(pwd, savedpwd);
 }
 
+// Draws an error message and waits for a keypress
+void drawError(char *msg)
+{	
+	move(maxy, 0);
+	clearline();
+	printsize(msg, maxx);
+	in();
+}
+
 // Copies (*keepoldFile* = 1) or cuts (*keepoldFile* = 0) the file from *filecppwd* to *pwd*
 void copycutFile()
 {
-	copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile);// TODO handle errors
+	if (copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile))
+		drawError("Could not copy or cut entry");
 }
 
 // Draws the top-right status line (current entry, offset, etc)
@@ -651,8 +654,8 @@ void deleteFile(char *file)
 {
 	char fullpath[PATH_MAX+1];
 	constructPath(file, fullpath);
-	if (removeEntry(fullpath)) // TODO error handling
-		raise(SIGTRAP);
+	if (removeEntry(fullpath))
+		drawError("Could not delete");
 }
 
 // Provides inline text editing with inline right/left movement for functions *editfname* and *createEntry*
@@ -915,8 +918,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	{
 		if (!strcmp(entries[i].name, fname))
 		{
-			moveprint(maxy, 0, "The file/directory with this name already exists");
-			in();
+			drawError("The file/directory with this name already exists");
 			*result = i;
 			return 0;
 		}
@@ -924,10 +926,17 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 
 	char fullpath[PATH_MAX+1];
 	constructPath(fname, fullpath);
-	if (isdir) // TODO? error checking
-		mkdir(fullpath, 0755);
+	int success;
+	if (isdir)
+		success = mkdir(fullpath, 0755);
 	else
-		close(creat(fullpath, 0644));
+		success = close(creat(fullpath, 0644));
+
+	if (success==-1)
+	{
+		drawError("Could not create entry");
+		return 0;
+	}
 
 	if (!entries) //empty dir
 	{
@@ -1199,7 +1208,7 @@ int main(int argc, char **argv)
 		}
 		else if (keypressed==config.goBack)
 		{
-			if (pathDepth)
+			if (pathDepth>1)
 			{
 				backpwd = goback();
 				clear();
