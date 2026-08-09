@@ -1,5 +1,5 @@
-#ifndef DIRENUM_H
-#define DIRENUM_H
+#ifndef DIRENUM_H_
+#define DIRENUM_H_
 
 #include <stdint.h>
 #include <dirent.h>

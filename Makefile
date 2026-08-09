@@ -16,6 +16,7 @@ sanitizer: LDFLAGS := -fsanitize=address
 sanitizer: debug
 
 debug: CFLAGS += -g
+debug: CFLAGS += -DDEBUG
 debug: LDFLAGS += -g
 debug: $(PROGNAME)
 

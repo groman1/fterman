@@ -14,6 +14,8 @@
 #include "settings.h"
 #include "futils.h"
 
+#include "debug.h"
+
 #define pwd pwdarr[currentWindow]
 #define filter filterarr[currentWindow]
 #define pwdlen pwdlenarr[currentWindow]
@@ -30,8 +32,6 @@
 #define SIZEGROUP 1
 #define ACCESSEDTIMEGROUP 2
 #define MODIFIEDTIMEGROUP 3
-
-#define UNUSED 0
 
 #define WINDOWQTY 4 // custom quantities are not implemented, using more than 4 will result in more memory used
 
@@ -200,7 +200,6 @@ void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIn
 {
 	move(1+offset, prefixlen);
 	uint8_t namelen = strlen(name);
-	if (currIndex==UNUSED) currIndex = namelen;
 	char *linkpath = 0;
 	if (!showsize) fileSizeLen = 0;
 	if (isasymlink)
@@ -247,7 +246,7 @@ void deHighlightEntry(entry_t entry, int offset)
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrcolorpair(colorpair);
-	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR, 0);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR, 0);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -264,7 +263,7 @@ void highlightEntry(entry_t entry, int offset)
 	clearline();
 	wrattr(REVERSE);
 	wrcolorpair(colorpair);
-	printName(entry.name, getIntLen(entry.data.st_size), offset, UNUSED, colorpair==SYMLINKCOLOR, 0);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR, 0);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -401,11 +400,12 @@ int dirfilter(const struct dirent *entry)
 	if (entry->d_name[0]=='.'&&(entry->d_name[1]==0||(entry->d_name[1]=='.'&&entry->d_name[2]==0))) return 0;
 
 	if (!strcasestr(entry->d_name, filter)) return 0;
+	debuglog("CHECK DIR %s\n", entry->d_name);
 	char fullpath[PATH_MAX+1];
 	constructPath(entry->d_name, fullpath);
 	struct stat entrydata;
-	stat(fullpath, &entrydata);
-	if (S_ISDIR(entrydata.st_mode)) return 1;
+	if (stat(fullpath, &entrydata)) return 0;
+	if ((S_ISDIR(entrydata.st_mode))) return 1;
 	return 0;
 }
 
@@ -413,20 +413,22 @@ int dirfilter(const struct dirent *entry)
 int filefilter(const struct dirent *entry)
 {
 	if (!strcasestr(entry->d_name, filter)) return 0;
+	debuglog("CHECK FILE %s\n", entry->d_name);
 	char fullpath[PATH_MAX+1];
 	constructPath(entry->d_name, fullpath);
 	struct stat entrydata;
-	stat(fullpath, &entrydata);
-	if (!S_ISDIR(entrydata.st_mode)) return 1;
+	if (stat(fullpath, &entrydata)) return 1;
+	if (!(S_ISDIR(entrydata.st_mode))) return 1;
 	return 0;
 }
 
 // Gets the file list using scandir(), returning them as return value and returning the quanitity of them as *qtyEntries*
 entry_t *getFileList(int *qtyEntries)
 {
+	debuglog("PATH %s, ", pwd);
 	char fileName[PATH_MAX+1];
 	entry_t *fileList = 0;
-	int currLength, offset = 0; // offset is the number of "." and ".." currently found
+	int currLength;
 	struct dirent **entries;
 	int n;
 	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
@@ -434,14 +436,15 @@ entry_t *getFileList(int *qtyEntries)
 
 	if (n==-1)
 	{ *qtyEntries = 0; return 0; }
+	debuglog("DIR %d, ", n);
 	fileList = malloc(sizeof(entry_t)*n);
 	for (int i = 0; i<n; ++i)
 	{
 		constructPath(entries[i]->d_name, fileName);
-		lstat(fileName, &fileList[i-offset].data);
+		lstat(fileName, &fileList[i].data);
 		currLength = strlen(entries[i]->d_name);
-		fileList[i-offset].name = malloc(currLength+1);
-		for (int x = 0; x<=currLength; fileList[i-offset].name[x] = entries[i]->d_name[x], ++x);
+		fileList[i].name = malloc(currLength+1);
+		for (int x = 0; x<=currLength; fileList[i].name[x] = entries[i]->d_name[x], ++x);
 		free(entries[i]);
 	}
 	free(entries);
@@ -453,15 +456,15 @@ filescan:
 	if (*qtyEntries+n<=0)
 	{ *qtyEntries = 0; return 0; }
 	fileList = realloc(fileList, (*qtyEntries+n)*sizeof(entry_t));
-	offset = 0;
+	debuglog("FILE %d, TOTAL %d\n", n, *qtyEntries);
 
 	for (int i = 0; i<n; ++i)
 	{
 		constructPath(entries[i]->d_name, fileName);
-		lstat(fileName, &fileList[i-offset+*qtyEntries].data);
+		lstat(fileName, &fileList[i+*qtyEntries].data);
 		currLength = strlen(entries[i]->d_name);
-		fileList[i-offset+*qtyEntries].name = malloc(currLength+1);
-		for (int x = 0; x<=currLength; fileList[i-offset+*qtyEntries].name[x] = entries[i]->d_name[x], ++x);
+		fileList[i+*qtyEntries].name = malloc(currLength+1);
+		for (int x = 0; x<=currLength; fileList[i+*qtyEntries].name[x] = entries[i]->d_name[x], ++x);
 		free(entries[i]);
 	}
 	*qtyEntries += n;
@@ -493,7 +496,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		else currPair = REGFILECOLOR;
 		clearline();
 		wrcolorpair(currPair);
-		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, UNUSED, currPair==SYMLINKCOLOR, 0);
+		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, 0, currPair==SYMLINKCOLOR, 0);
 		if (currPair<=EXECCOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
@@ -681,11 +684,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 	setcursor(1);
 	move(offset+1, prefixlen);
 	cleartoeol();
-	workspacestring[1] = currentWindow+49;
 
-	saveCursorPos();
-	moveprintsize(maxy, maxx-2, workspacestring, 2);
-	loadCursorPos();
 	wrcolorpair(colorpair);
 	if (initialtext) printName(initialtext, 0, offset, currIndex, 0, prefixlen);
 
@@ -744,12 +743,6 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 
 		move(offset+1, prefixlen);
 		cleartoeol();
-
-		wrattr(NORMAL);
-		saveCursorPos();
-		moveprintsize(maxy, maxx-2, workspacestring, 2);
-		loadCursorPos();
-
 		wrcolorpair(colorpair);
 		printName(text, 0, offset, currIndex, 0, prefixlen);
 	}
@@ -828,6 +821,7 @@ void search()
 				if (currIndex)
 				{
 					strPushback(filter, --currIndex);
+					--filterlen;
 					move(maxy, 0);
 					clearline();
 					moveprint(maxy, 0, "/");
