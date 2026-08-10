@@ -14,6 +14,7 @@
 #include "settings.h"
 #include "futils.h"
 
+#include <errno.h>
 #include "debug.h"
 
 #define pwd pwdarr[currentWindow]
@@ -39,7 +40,7 @@
 #define MINY 5
 
 #define regenerateentries\
-				if (qtyEntries) freeFileList(entries, qtyEntries);\
+				if (qtyEntries) free(entries);\
 				entries = getFileList(&qtyEntries);\
 
 #define redrawentries\
@@ -59,7 +60,7 @@ char workspacestring[2] = "W";
 
 typedef struct
 {
-	char *name;
+	char name[256];
 	struct stat data;
 } entry_t;
 
@@ -298,14 +299,17 @@ void drawError(char *msg)
 	move(maxy, 0);
 	clearline();
 	printsize(msg, maxx);
-	in();
+	inesc();
 }
 
 // Copies (*keepoldFile* = 1) or cuts (*keepoldFile* = 0) the file from *filecppwd* to *pwd*
 void copycutFile()
 {
 	if (copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile))
+	{
 		drawError("Could not copy or cut entry");
+		debuglog("COPYCUT ERR CODE %d", errno);
+	}
 }
 
 // Draws the top-right status line (current entry, offset, etc)
@@ -428,7 +432,6 @@ entry_t *getFileList(int *qtyEntries)
 	debuglog("PATH %s, ", pwd);
 	char fileName[PATH_MAX+1];
 	entry_t *fileList = 0;
-	int currLength;
 	struct dirent **entries;
 	int n;
 	n = scandir(pwd, &entries, &dirfilter, sortingfunction);
@@ -442,9 +445,7 @@ entry_t *getFileList(int *qtyEntries)
 	{
 		constructPath(entries[i]->d_name, fileName);
 		lstat(fileName, &fileList[i].data);
-		currLength = strlen(entries[i]->d_name);
-		fileList[i].name = malloc(currLength+1);
-		for (int x = 0; x<=currLength; fileList[i].name[x] = entries[i]->d_name[x], ++x);
+		strcpy(fileList[i].name, entries[i]->d_name);
 		free(entries[i]);
 	}
 	free(entries);
@@ -462,25 +463,12 @@ filescan:
 	{
 		constructPath(entries[i]->d_name, fileName);
 		lstat(fileName, &fileList[i+*qtyEntries].data);
-		currLength = strlen(entries[i]->d_name);
-		fileList[i+*qtyEntries].name = malloc(currLength+1);
-		for (int x = 0; x<=currLength; fileList[i+*qtyEntries].name[x] = entries[i]->d_name[x], ++x);
+		strcpy(fileList[i+*qtyEntries].name, entries[i]->d_name);
 		free(entries[i]);
 	}
 	*qtyEntries += n;
 	free(entries);
 	return fileList;
-}
-
-// Frees the file list allocated by getFileList() function
-void freeFileList(entry_t *fileList, int qtyEntries)
-{
-	for (int i = 0; i<qtyEntries; ++i)
-	{
-		free(fileList[i].name);
-		fileList[i].name = 0;
-	}
-	free(fileList);
 }
 
 // Draws entries starting from entries[offset] until entries[offset+maxy] or entries[qtyEntries] (whichever is lower)
@@ -531,9 +519,9 @@ char *goback()
 int findentry(char *entryname, entry_t *entries, int qtyEntries)
 {
 	for (int i = 0; i<qtyEntries; ++i)
-	{
-		if (!strcmp(entries[i].name, entryname)) return i;
-	}
+		if (!strcmp(entries[i].name, entryname))
+			return i;
+
 	return -1;
 }
 
@@ -566,7 +554,6 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 			{
 				*entryID = findentry(pathIds[pathDepth+1], newentries, newQtyEntries);
 				if (*entryID==-1) ++*entryID;
-				// TESTING
 				*offset = *entryID?((*entryID-*entryID%(maxy-1)>newQtyEntries-(maxy-1)&&*entryID>maxy)?newQtyEntries-(maxy-1):*entryID-1):*entryID;
 			}
 			else
@@ -589,7 +576,7 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		}
 		++pathDepth;
 
-		freeFileList(entries, *qtyEntries);
+		free(entries);
 		entries = newentries;
 		*qtyEntries = newQtyEntries;
 
@@ -616,10 +603,10 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 		pid_t pid = fork();
 
 		if (pid==0)
-		{
 			exit(execl(fullpath, fullpath, (char*)0));
-		}
+
 		while(wait(0)!=-1);
+		inesc();
 		init();
 		setcursor(0);
 		clear();
@@ -657,25 +644,24 @@ void deleteFile(char *file)
 	char fullpath[PATH_MAX+1];
 	constructPath(file, fullpath);
 	if (removeEntry(fullpath))
-		drawError("Could not delete");
+	{
+		debuglog("DELETE ERR %d", errno);
+		drawError("Deletion error");
+	}
 }
 
 // Provides inline text editing with inline right/left movement for functions *editfname* and *createEntry*
-// TODO implement an argument for returning static array
-char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t colorpair)
+char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t colorpair, char *text)
 {
-	char *text;
 	uint8_t length, currIndex, ch;
 	if (initialtext)
 	{
-		text = malloc(strlen(initialtext)+1);
 		strcpy(text, initialtext);
 		length = strlen(initialtext);
 		currIndex = length;
 	}
 	else
 	{
-		text = malloc(1);
 		text[0] = 0;
 		length = 0;
 		currIndex = 0;
@@ -688,7 +674,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 	wrcolorpair(colorpair);
 	if (initialtext) printName(initialtext, 0, offset, currIndex, 0, prefixlen);
 
-	while((ch=inesc())&&ch!=10&&ch!=13)
+	while((ch=inesc())&&!((ch==10||ch==13)&&(length)))
 	{
 		switch(ch)
 		{
@@ -696,7 +682,6 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 			{
 				if (length<255)
 				{
-					text = realloc(text, length+2);
 					if (length!=currIndex) strPushfwd(text, currIndex, length);
 					++length;
 					text[currIndex++] = ch;
@@ -707,26 +692,21 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 			case 127:
 			{
 				if (currIndex)
-				{
 					strPushback(text, --currIndex);
-					text = realloc(text, length--);
-				}
+
 				break;
 			}
 			case 183:
 			{
 				if (currIndex!=length)
-				{
 					strPushback(text, currIndex);
-					text = realloc(text, length--);
-				}
+
 				break;
 			}
 			case 3:
 			{
 				setcursor(0);
-				free(text);
-				return 0;
+				return initialtext;
 			}
 			case 191:
 			{
@@ -755,7 +735,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 // Calls the function to edit the filename on line *offset*+1
 void editfname(entry_t *entry, int offset)
 {
-	char *oldname = malloc(strlen(entry->name)+1);
+	char oldname[256], newname[256];
 	strcpy(oldname, entry->name);
 
 	uint8_t colorpair;
@@ -764,23 +744,18 @@ void editfname(entry_t *entry, int offset)
 	else if (S_IXUSR&entry->data.st_mode) colorpair = EXECCOLOR;
 	else colorpair = REGFILECOLOR;
 
-	free(entry->name);
-	entry->name = inlineedit(offset, oldname, 0, colorpair);
-	if (!entry->name)
-	{
-		entry->name = malloc(strlen(oldname)+1);
-		strcpy(entry->name, oldname);
-		free(oldname);
-		return;
-	}
+	char *name = inlineedit(offset, oldname, 0, colorpair, newname);
+	strcpy(entry->name, name);
 
 	char oldpath[PATH_MAX+1], newpath[PATH_MAX+1];
 	constructPath(oldname, oldpath);
-	constructPath(entry->name, newpath);
+	constructPath(name, newpath);
 
-	rename(oldpath, newpath);
-
-	free(oldname);
+	if (rename(oldpath, newpath))
+	{
+		debuglog("RENAME ERR CODE %d\n", errno);
+		drawError("Renaming error");
+	}
 }
 
 // Opens search menu, sets *filter* to the phrase entered
@@ -832,13 +807,13 @@ void search()
 			}
 			case 13: case 10:
 			{
-				if (qtyEntries&&searchtype) freeFileList(entries, qtyEntries);
+				if (qtyEntries&&searchtype) free(entries);
 				setcursor(0); 
 				return;
 			}
 			case 3:
 			{
-				if (qtyEntries&&searchtype) freeFileList(entries, qtyEntries);
+				if (qtyEntries&&searchtype) free(entries);
 				*filter = 0;
 				setcursor(0);
 				return;
@@ -885,16 +860,17 @@ void setSortingFunction()
 entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint32_t *result)
 {
 	char *fname;
+	char namebuf[256];
 
 	if (isdir)
 	{
 		moveprint(maxy, 0, "D: ");
-		fname = inlineedit(maxy-1, NULL, 2, DIRECTORYCOLOR);
+		fname = inlineedit(maxy-1, NULL, 2, DIRECTORYCOLOR, namebuf);
 	}
 	else	
 	{
 		moveprint(maxy, 0, "F: ");
-		fname = inlineedit(maxy-1, NULL, 2, REGFILECOLOR);
+		fname = inlineedit(maxy-1, NULL, 2, REGFILECOLOR, namebuf);
 	}
 
 	wrcolorpair(1);
@@ -927,6 +903,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 
 	if (success==-1)
 	{
+		debuglog("CREATE ERR CODE %d", errno);
 		drawError("Could not create entry");
 		return 0;
 	}
@@ -934,7 +911,6 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	if (!entries) //empty dir
 	{
 		entries = malloc(sizeof(entry_t));
-		entries[0].name = malloc(strlen(fname)+1);
 		strcpy(entries[0].name, fname);
 		stat(fullpath, &entries[0].data);
 		*result = 0;
@@ -998,11 +974,8 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 	}
 
 	entries = entriesPushForward(entries, index, qtyEntries);
-	entries[index].name = malloc(strlen(fname)+1);
 	strcpy(entries[index].name, fname);
 	stat(fullpath, &entries[index].data);
-
-	free(fname);
 
 	*result = index;
 
@@ -1403,7 +1376,7 @@ int main(int argc, char **argv)
 	for (int i = 0; i<WINDOWQTY; ++i)
 	{
 		if ((windowsInitialised>>i)&1)
-			freeFileList(entriesarr[i], qtyEntriesarr[i]);
+			free(entriesarr[i]);
 	}
 	freeConfig();
 	setcursor(1);
