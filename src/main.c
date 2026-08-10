@@ -218,10 +218,9 @@ uint8_t overflowPrint(char *text, uint8_t len, uint8_t maxlen, uint16_t offset, 
 	return (currIndex+(maxlen+2)*hasTrailing)%maxlen;
 }
 
-// Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*. currIndex is only used in editfname()
-void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIndex, uint8_t isasymlink, uint8_t prefixlen)
+// Prints filename *name* at offset *offset*, leaving space for file size with length *fileSizeLen*.
+void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint8_t isasymlink)
 {
-	move(1+offset, prefixlen);
 	uint8_t namelen = strlen(name);
 	char *linkpath = 0;
 	if (!showsize) fileSizeLen = 0;
@@ -237,11 +236,11 @@ void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIn
 		}
 	}
 
-	uint8_t xoff = overflowPrint(name, namelen, maxx-fileSizeLen-(fileSizeLen!=0), offset, prefixlen, currIndex);
+	uint8_t xoff = overflowPrint(name, namelen, maxx-fileSizeLen-(fileSizeLen!=0), offset, 0, namelen);
 
 	if (isasymlink)
 	{
-		if (xoff+fileSizeLen+(fileSizeLen!=0)+4+strlen(linkpath)+prefixlen<maxx)
+		if (xoff+fileSizeLen+(fileSizeLen!=0)+4+strlen(linkpath)<maxx)
 		{
 			print(" => ");
 			print(linkpath);
@@ -279,7 +278,7 @@ void deHighlightEntry(entry_t entry, int offset)
 	else colorpair = REGFILECOLOR;
 	clearline();
 	wrcolorpair(colorpair);
-	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR, 0);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, colorpair==SYMLINKCOLOR);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -296,7 +295,7 @@ void highlightEntry(entry_t entry, int offset)
 	clearline();
 	wrattr(REVERSE);
 	wrcolorpair(colorpair);
-	printName(entry.name, getIntLen(entry.data.st_size), offset, 0, colorpair==SYMLINKCOLOR, 0);
+	printName(entry.name, getIntLen(entry.data.st_size), offset, colorpair==SYMLINKCOLOR);
 	if (colorpair<=EXECCOLOR&&showsize) printFileSize(entry.data.st_size, offset);
 	wrattr(NORMAL);
 }
@@ -518,7 +517,7 @@ void drawObjects(entry_t *entries, int offset, int qtyEntries)
 		else currPair = REGFILECOLOR;
 		clearline();
 		wrcolorpair(currPair);
-		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, 0, currPair==SYMLINKCOLOR, 0);
+		printName(entries[i].name, getIntLen(entries[i].data.st_size), i-offset, currPair==SYMLINKCOLOR);
 		if (currPair<=EXECCOLOR&&showsize) printFileSize(entries[i].data.st_size, i-offset);
 		move(i-offset+2, 0);
 	}
@@ -708,7 +707,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 	cleartoeol();
 
 	wrcolorpair(colorpair);
-	if (initialtext) printName(initialtext, 0, offset, currIndex, 0, prefixlen);
+	if (initialtext) overflowPrint(initialtext, length, maxx, offset, prefixlen, currIndex);
 
 	while((ch=inesc())&&!((ch==10||ch==13)&&(length)))
 	{
@@ -760,7 +759,7 @@ char *inlineedit(uint16_t offset, char *initialtext, uint16_t prefixlen, uint8_t
 		move(offset+1, prefixlen);
 		cleartoeol();
 		wrcolorpair(colorpair);
-		printName(text, 0, offset, currIndex, 0, prefixlen);
+		overflowPrint(text, length, maxx, offset, prefixlen, currIndex);
 	}
 	
 	wrattr(NORMAL);
