@@ -1,6 +1,6 @@
 PROGNAME := fterman
 
-CFLAGS := -Wall -Werror -Wextra -Wno-unused-but-set-parameter -Wno-array-bounds -Wno-restrict
+CFLAGS := -Wall -Werror -Wextra -Wno-restrict -Wno-array-bounds
 LDFLAGS :=
 
 RM := rm -f
@@ -16,7 +16,7 @@ sanitizer: LDFLAGS := -fsanitize=address
 sanitizer: debug
 
 debug: CFLAGS += -g
-debug: CFLAGS += -DDEBUG
+#debug: CFLAGS += -DDEBUG
 debug: LDFLAGS += -g
 debug: $(PROGNAME)
 

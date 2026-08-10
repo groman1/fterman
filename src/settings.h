@@ -25,6 +25,7 @@ struct config_s
 	option_t createdir;
 	option_t sortingmethod;
 	option_t showsize;
+	option_t shortsize;
 	option_t searchtype;
 };
 

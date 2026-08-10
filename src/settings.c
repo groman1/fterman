@@ -25,6 +25,7 @@ const char *defaultconfigstring = "<option for=\"goUp\">188</option>\n\
 <option for=\"createdir\">100</option>\n\
 <option for=\"sortingmethod\">0</option>\n\
 <option for=\"showsize\">1</option>\n\
+<option for=\"shortsize\">1</option>\n\
 <option for=\"searchtype\">1</option>\n\
 <option for=\"regfilecolor\">70</option>\n\
 <option for=\"executablecolor\">20</option>\n\
@@ -192,7 +193,7 @@ void dehighlightSetting(int line, char *setting)
 // Updates color pair specified
 void updatecolorpair(uint8_t colorpairid)
 {
-	initcolorpair(colorpairid, config->dataArr[20+colorpairid].value.str[0]-48, config->dataArr[20+colorpairid].value.str[1]-48);
+	initcolorpair(colorpairid, config->dataArr[21+colorpairid].value.str[0]-48, config->dataArr[21+colorpairid].value.str[1]-48);
 }
 
 // Checks if a keybind is already in use
@@ -235,7 +236,7 @@ createconfig:
 	confstring[i] = 0;
 
 	config = parseXML(confstring);
-	if (config==(void*)0x10||config->tagQty!=26) // 0 length file or outdated config
+	if (config==(void*)0x10||config->tagQty!=27) // 0 length file or outdated config
 	{
 		fclose(configFile);
 		goto createconfig;
@@ -260,7 +261,8 @@ createconfig:
 	configstruct.createdir = strTooption_t(config->dataArr[17].value.str);
 	configstruct.sortingmethod = config->dataArr[18].value.str[0]-48;
 	configstruct.showsize = config->dataArr[19].value.str[0]-48;
-	configstruct.searchtype = config->dataArr[20].value.str[0]-48;
+	configstruct.shortsize = config->dataArr[20].value.str[0]-48;
+	configstruct.searchtype = config->dataArr[21].value.str[0]-48;
 	updatecolorpair(1);
 	updatecolorpair(2);
 	updatecolorpair(3);
@@ -295,6 +297,7 @@ void freeConfig()
 static char *settings[] = { "Move up an entry", "Move down an entry", "Move up a page", "Move down a page", "Open file or directory", "Rename file", "Delete file", "Go back a directory", "Save current path", "Load saved path", "Quit", "Copy", "Cut", "Paste", "Search", "Clear search entry", "Create a file", "Create a directory"};
 static char *sortingmethods[] = { "< Alphabetic (A-Z) >", "< Alphabetic (Z-A) >", "< Size (low to high) >", "< Size (high to low) >", "< Last accessed (old to new) >", "< Last accessed (new to old) >", "< Last modified (old to new) >", "< Last modified (new to old) >" };
 static char *sizestatetext[] = { "Hide size", "Show size" };
+static char *sizelengthtext[] = { "Long size", "Short size" };
 static char *searchtext[] = { "Use static search", "Use dynamic search" };
 static char *entrytypes[] = { "< Regular file >", "< Executable >", "< Directory >", "< Symlink >", "< Broken symlink >" };
 static char *colortext[] = { "< Foreground color >", "< Background color >" };
@@ -343,22 +346,28 @@ void drawSettings()
 			case 20:
 			{
 				uint8_t index = config->dataArr[i].value.str[0]-48;
-				moveprint(i-offset, 0, searchtext[index]);
+				moveprint(i-offset, 0, sizelengthtext[index]);
 				break;
 			}
 			case 21:
+			{
+				uint8_t index = config->dataArr[i].value.str[0]-48;
+				moveprint(i-offset, 0, searchtext[index]);
+				break;
+			}
+			case 22:
 			{
 				wrcolorpair(currentrytype+1);
 				moveprint(i-offset, 0, entrytypes[currentrytype]);
 				wrcolorpair(0);
 				break;
 			}
-			case 22:
+			case 23:
 			{
 				moveprint(i-offset, 0, colortext[0]);
 				break;
 			}
-			case 23:
+			case 24:
 			{
 				moveprint(i-offset, 0, colortext[1]);
 				break;
@@ -401,7 +410,14 @@ struct config_s openSettings()
 						highlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
 						break;
 					}
-					case 20: // search : dynamic/static
+					case 20: // size length
+					{
+						config->dataArr[currLine].value.str[0] = !(config->dataArr[currLine].value.str[0]!=48)+48;
+						clearSettingLine(currLine);
+						highlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+						break;
+					}
+					case 21: // search : dynamic/static
 					{
 						config->dataArr[currLine].value.str[0] = !(config->dataArr[currLine].value.str[0]!=48)+48;
 						clearSettingLine(currLine);
@@ -511,28 +527,35 @@ struct config_s openSettings()
 							highlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
 							break;
 						}
-						case 19: // show size => search type
+						case 19: // show size => size length
 						{
 							dehighlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
+							++currLine;
+							highlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+							break;
+						}
+						case 20: // size length => search type
+						{
+							dehighlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
 							++currLine;
 							highlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
 							break;
 						}
-						case 20: // search type => color preview
+						case 21: // search type => color preview
 						{
 							dehighlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
 							++currLine;
 							highlightColorOption(currLine, entrytypes[currentrytype], currentrytype+1);
 							break;
 						}
-						case 21: // color preview => foreground selector
+						case 22: // color preview => foreground selector
 						{
 							drawColorOption(currLine, entrytypes[currentrytype], currentrytype+1);
 							++currLine;
 							highlightSetting(currLine, colortext[0]);
 							break;
 						}
-						case 22: // foreground selector => background selector
+						case 23: // foreground selector => background selector
 						{
 							dehighlightSetting(currLine, colortext[0]);
 							++currLine;
@@ -575,28 +598,35 @@ struct config_s openSettings()
 							highlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]); 
 							break;
 						}
-						case 20: // show size <= search type
+						case 20: // show size <= size length
 						{
-							dehighlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]); 
+							dehighlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]); 
 							--currLine;
 							highlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
 							break;
 						}
-						case 21: // search type <= color preview
+						case 21: // size length <= search type
+						{
+							dehighlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]); 
+							--currLine;
+							highlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+							break;
+						}
+						case 22: // search type <= color preview
 						{
 							drawColorOption(currLine, entrytypes[currentrytype], currentrytype+1);
 							--currLine;
 							highlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
 							break;
 						}
-						case 22: // color preview <= foreground selector
+						case 23: // color preview <= foreground selector
 						{
 							dehighlightSetting(currLine, colortext[0]);
 							--currLine;
 							highlightColorOption(currLine, entrytypes[currentrytype], currentrytype+1);
 							break;
 						}
-						case 23: // foreground selector <= background selector
+						case 24: // foreground selector <= background selector
 						{
 							dehighlightSetting(currLine, colortext[1]);
 							--currLine;

@@ -52,7 +52,7 @@
 
 int (*sortingfunction)(const struct dirent**, const struct dirent**);
 uint16_t maxx, maxy, pwdlenarr[WINDOWQTY];
-int8_t keepoldFile, sortingmethod, showsize, searchtype, currentWindow;
+int8_t keepoldFile, sortingmethod, showsize, shortSize, searchtype, currentWindow;
 char pwdarr[WINDOWQTY][PATH_MAX+1], filterarr[WINDOWQTY][256], savedpwd[PATH_MAX+1], filecppwd[PATH_MAX+1];
 char *pathIdsarr[WINDOWQTY][PATH_MAX/4];
 uint16_t pathDeptharr[WINDOWQTY];
@@ -65,7 +65,7 @@ typedef struct
 } entry_t;
 
 // Returns the amount of characters required to store *input* in a string
-uint8_t getIntLen(long long input)
+uint8_t getIntLen(uint64_t input)
 {
 	uint8_t currFileSizeLen = 1;
 	uint64_t multiplier = 10;
@@ -82,6 +82,28 @@ char toLower(char ch)
 {
 	if (ch>='A'&&ch<='Z') return ch+32;
 	return ch;
+}
+
+// Shorten the filesize to 6 characters (at most)
+void shortenSize(uint64_t size, char *buf)
+{
+	char *appends[] = {"B", "KB", "MB", "GB", "TB"};
+	uint8_t i = 0;
+	int currDiv = 1024;
+	while ((size/currDiv))
+	{
+		currDiv *= 1024;
+		++i;
+	}
+	currDiv /= 1024;
+
+	if (i>=5)
+	{
+		debuglog("SHORTENSIZE OVERFLOW\n");
+		return;
+	}
+
+	snprintf(buf, 7, "%u%s", (unsigned short)(size/currDiv), appends[i]);
 }
 
 // Pushes back *string* starting at *startingIndex* by one byte, clearing letter at *startingIndex*
@@ -230,10 +252,20 @@ void printName(char *name, uint8_t fileSizeLen, uint16_t offset, uint16_t currIn
 }
 
 // Prints file size *size* at offset *offset*
-void printFileSize(long long size, int offset)
+void printFileSize(uint64_t size, int offset)
 {
-	move(1+offset, maxx-getIntLen(size));
-	dprintf(STDOUT_FILENO, "%lld", size);
+	if (shortSize)
+	{
+		char buf[7];
+		shortenSize(size, buf);
+		move(1+offset, maxx-strlen(buf));
+		print(buf);
+	}
+	else
+	{
+		move(1+offset, maxx-getIntLen(size));
+		dprintf(STDOUT_FILENO, "%lu", size);
+	}
 }
 
 // Reverts the effects of highlightEntry() (applies NORMAL attribute)
@@ -303,13 +335,15 @@ void drawError(char *msg)
 }
 
 // Copies (*keepoldFile* = 1) or cuts (*keepoldFile* = 0) the file from *filecppwd* to *pwd*
-void copycutFile()
+uint8_t copycutFile()
 {
 	if (copymove(filecppwd, pwd, filecppwd+entryoffset, !keepoldFile))
 	{
 		drawError("Could not copy or cut entry");
-		debuglog("COPYCUT ERR CODE %d", errno);
+		debuglog("COPYCUT ERR CODE %d\n", errno);
+		return 1;
 	}
+	return 0;
 }
 
 // Draws the top-right status line (current entry, offset, etc)
@@ -639,15 +673,17 @@ entry_t *enterObject(entry_t *entries, int *entryID, int *qtyEntries, int *offse
 }
 
 // Deletes a file at *pwd* + *file*
-void deleteFile(char *file)
+uint8_t deleteFile(char *file)
 {
 	char fullpath[PATH_MAX+1];
 	constructPath(file, fullpath);
 	if (removeEntry(fullpath))
 	{
-		debuglog("DELETE ERR %d", errno);
+		debuglog("DELETE ERR %d\n", errno);
 		drawError("Deletion error");
+		return 1;
 	}
+	return 0;
 }
 
 // Provides inline text editing with inline right/left movement for functions *editfname* and *createEntry*
@@ -903,7 +939,7 @@ entry_t *createEntry(entry_t *entries, uint32_t qtyEntries, uint8_t isdir, uint3
 
 	if (success==-1)
 	{
-		debuglog("CREATE ERR CODE %d", errno);
+		debuglog("CREATE ERR CODE %d\n", errno);
 		drawError("Could not create entry");
 		return 0;
 	}
@@ -1024,6 +1060,7 @@ int main(int argc, char **argv)
 	currentWindow = 0;
 	sortingmethod = config.sortingmethod;
 	showsize = config.showsize;
+	shortSize = config.shortsize;
 	searchtype = config.searchtype;
 	setSortingFunction();
 
@@ -1190,17 +1227,19 @@ int main(int argc, char **argv)
 		{
 			if (qtyEntries)
 			{
-				deleteFile(entries[currEntry].name); 
-				deHighlightEntry(entries[currEntry], currEntry-offset); 
-				entries = entriesPushback(entries, currEntry, qtyEntries);
-				clear();
-				drawPath();
-				if (currEntry==qtyEntries-1)
-				{ 
-					--currEntry; 
-					if (offset) --offset;
+				if (!deleteFile(entries[currEntry].name))
+				{
+					deHighlightEntry(entries[currEntry], currEntry-offset); 
+					entries = entriesPushback(entries, currEntry, qtyEntries);
+					clear();
+					drawPath();
+					if (currEntry==qtyEntries-1)
+					{ 
+						--currEntry; 
+						if (offset) --offset;
+					}
+					--qtyEntries;
 				}
-				--qtyEntries;
 				redrawentries;
 			}
 		}
@@ -1233,6 +1272,7 @@ int main(int argc, char **argv)
 				regenerateentries;
 			}
 			showsize = config.showsize;
+			shortSize = config.shortsize;
 			searchtype = config.searchtype;
 			clear();
 			drawPath();
@@ -1259,10 +1299,12 @@ int main(int argc, char **argv)
 		{
 			if (keepoldFile!=-1)
 			{
-				copycutFile();
-				regenerateentries;
-				currEntry = findentry(filecppwd+entryoffset, entries, qtyEntries);
-				offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
+				if (!copycutFile())
+				{
+					regenerateentries;
+					currEntry = findentry(filecppwd+entryoffset, entries, qtyEntries);
+					offset = currEntry?(((currEntry-currEntry%(maxy-1)>qtyEntries-(maxy-1))&&currEntry>maxy)?qtyEntries-(maxy-1):currEntry-1):currEntry;
+				}
 				redrawentries;
 			}
 			if (keepoldFile==0)

@@ -356,11 +356,10 @@ int swapElements(xml *ptr, int firstElemId, int secondElemId)
 	return 0;
 }
 
-int nestElement(xml *ptr, xml *newptr, int index)
+xml *nestElement(xml *ptr, int index)
 {
-	if (!ptr->dataArr[index].isNesting) return 1;
-	newptr = ptr->dataArr[index].value.xmlVal;
-	return 0;
+	if (!ptr->dataArr[index].isNesting) return 0;
+	return ptr->dataArr[index].value.xmlVal;
 }
 
 xml *parseXML(char *string)
