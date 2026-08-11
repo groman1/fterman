@@ -349,7 +349,7 @@ uint8_t copycutFile()
 void drawEntryCount(int offset, int currentry, int qtyEntries)
 {
 	char entrycntstring[46];
-	sprintf(entrycntstring, "%d-(%d)-%d/%d", offset+1, currentry+1, offset+maxy-3>qtyEntries?qtyEntries:offset+maxy-3, qtyEntries);
+	sprintf(entrycntstring, "%d-(%d)-%d/%d", offset+1, currentry+1, offset+maxy-1>qtyEntries?qtyEntries:offset+maxy-1, qtyEntries);
 	move(0, maxx-strlen(entrycntstring)-2);
 	cleartoeol();
 	moveprint(0, maxx-strlen(entrycntstring), entrycntstring);
@@ -874,6 +874,7 @@ void search()
 			cleartobot();
 			if (!qtyEntries) accessdenied();
 			drawObjects(entries, 0, qtyEntries);
+			if (qtyEntries) highlightEntry(entries[0], 0);
 			moveprintsize(maxy, maxx-2, workspacestring, 2);
 			moveprint(maxy, 0, "/");
 			overflowPrint(filter, filterlen, maxx-4, maxy-1, 1, currIndex);
