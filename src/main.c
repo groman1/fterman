@@ -89,21 +89,19 @@ void shortenSize(uint64_t size, char *buf)
 {
 	char *appends[] = {"B", "KB", "MB", "GB", "TB"};
 	uint8_t i = 0;
-	int currDiv = 1024;
-	while ((size/currDiv))
+	uint64_t currDiv = 1024;
+	while ((size/currDiv)&&i<5)
 	{
 		currDiv *= 1024;
 		++i;
 	}
-	currDiv /= 1024;
-
-	if (i>=5)
+	if (size/currDiv>1024)
 	{
-		debuglog("SHORTENSIZE OVERFLOW\n");
-		return;
+		debuglog("SHORTENSIZE OVERFLOW SIZE %llu", size);
 	}
 
-	snprintf(buf, 7, "%u%s", (unsigned short)(size/currDiv), appends[i]);
+	currDiv /= 1024;
+	snprintf(buf, 7, "%u%s", (uint16_t)(size/currDiv)%1024, appends[i]);
 }
 
 // Pushes back *string* starting at *startingIndex* by one byte, clearing letter at *startingIndex*
