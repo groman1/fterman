@@ -116,7 +116,6 @@ void strPushback(char *string, int startingIndex)
 // Pushes back *entries* starting at *startingIndex*, deleting the entry with index *startingIndex* and shortening the *entries* by 1
 entry_t *entriesPushback(entry_t *entries, int startingIndex, int qtyEntries)
 {
-	free(entries[startingIndex].name);
 	for (; startingIndex<qtyEntries-1; ++startingIndex)
 		entries[startingIndex] = entries[startingIndex+1];
 
