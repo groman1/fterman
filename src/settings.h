@@ -1,7 +1,9 @@
 #ifndef SETTINGS_H_
 #define SETTINGS_H_
 
-#define option_t unsigned char
+#include <stdint.h>
+
+#define option_t uint8_t
 
 struct config_s
 {

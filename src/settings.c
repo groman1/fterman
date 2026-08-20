@@ -33,10 +33,13 @@ const char *defaultconfigstring = "<option for=\"goUp\">188</option>\n\
 <option for=\"symlinkcolor\">60</option>\n\
 <option for=\"brokensymlinkcolor\">10</option>";
 
-#define option_t unsigned char
+#define option_t uint8_t
 
 xml *config;
 FILE *configFile;
+
+// Gets the value for setting with a specified id
+#define getXMLString(ptr, id) (ptr->tagArr[id].child->tagArr[0].tagName)
 
 uint8_t offset = 0, currLine = 0, currentrytype = 0, selected = 0;
 
@@ -58,13 +61,11 @@ char *strccat(char *string1, const char *string2)
 	char *result = malloc(strlen(string1)+strlen(string2)+1);
 	int x, i;
 	for (x = 0; string1[x]; ++x)
-	{
 		result[x] = string1[x];
-	}
+
 	for (i = 0; string2[i]; ++i)
-	{
 		result[i+x] = string2[i];
-	}
+
 	result[i+x] = 0;
 	return result;
 }
@@ -152,7 +153,7 @@ void highlightSetting(uint8_t line, char *setting)
 	if (line<18)
 	{
 		print(" : ");
-		char *keyname = getKeyName(strTooption_t(config->dataArr[line].value.str));
+		char *keyname = getKeyName(strTooption_t(getXMLString(config, line)));
 		print(keyname);
 		free(keyname);
 	}
@@ -193,7 +194,7 @@ void dehighlightSetting(int line, char *setting)
 // Updates color pair specified
 void updatecolorpair(uint8_t colorpairid)
 {
-	initcolorpair(colorpairid, config->dataArr[21+colorpairid].value.str[0]-48, config->dataArr[21+colorpairid].value.str[1]-48);
+	initcolorpair(colorpairid, getXMLString(config, 21+colorpairid)[0]-48, getXMLString(config, 21+colorpairid)[1]-48);
 }
 
 // Checks if a keybind is already in use
@@ -205,7 +206,7 @@ int findkeybind(uint8_t keybind, uint8_t id)
 	for (int i = 0; i<16; ++i)
 	{
 		if (i==id) continue;
-		if (!strcmp(keybind_s, config->dataArr[i].value.str)) return 1;
+		if (!strcmp(keybind_s, getXMLString(config, i))) return 1;
 	}
 	return 0;
 }
@@ -241,28 +242,28 @@ createconfig:
 		fclose(configFile);
 		goto createconfig;
 	}
-	configstruct.goUp = strTooption_t(config->dataArr[0].value.str);
-	configstruct.goDown = strTooption_t(config->dataArr[1].value.str);
-	configstruct.goUpLong = strTooption_t(config->dataArr[2].value.str);
-	configstruct.goDownLong = strTooption_t(config->dataArr[3].value.str);
-	configstruct.goFwd = strTooption_t(config->dataArr[4].value.str);
-	configstruct.editfile = strTooption_t(config->dataArr[5].value.str);
-	configstruct.deletefile = strTooption_t(config->dataArr[6].value.str);
-	configstruct.goBack = strTooption_t(config->dataArr[7].value.str);
-	configstruct.savedir = strTooption_t(config->dataArr[8].value.str);
-	configstruct.loaddir = strTooption_t(config->dataArr[9].value.str);
-	configstruct.quit = strTooption_t(config->dataArr[10].value.str);
-	configstruct.copy = strTooption_t(config->dataArr[11].value.str);
-	configstruct.cut = strTooption_t(config->dataArr[12].value.str);
-	configstruct.paste = strTooption_t(config->dataArr[13].value.str);
-	configstruct.search = strTooption_t(config->dataArr[14].value.str);
-	configstruct.cancelsearch = strTooption_t(config->dataArr[15].value.str);
-	configstruct.createfile = strTooption_t(config->dataArr[16].value.str);
-	configstruct.createdir = strTooption_t(config->dataArr[17].value.str);
-	configstruct.sortingmethod = config->dataArr[18].value.str[0]-48;
-	configstruct.showsize = config->dataArr[19].value.str[0]-48;
-	configstruct.shortsize = config->dataArr[20].value.str[0]-48;
-	configstruct.searchtype = config->dataArr[21].value.str[0]-48;
+	configstruct.goUp = strTooption_t(getXMLString(config, 0));
+	configstruct.goDown = strTooption_t(getXMLString(config, 1));
+	configstruct.goUpLong = strTooption_t(getXMLString(config, 2));
+	configstruct.goDownLong = strTooption_t(getXMLString(config, 3));
+	configstruct.goFwd = strTooption_t(getXMLString(config, 4));
+	configstruct.editfile = strTooption_t(getXMLString(config, 5));
+	configstruct.deletefile = strTooption_t(getXMLString(config, 6));
+	configstruct.goBack = strTooption_t(getXMLString(config, 7));
+	configstruct.savedir = strTooption_t(getXMLString(config, 8));
+	configstruct.loaddir = strTooption_t(getXMLString(config, 9));
+	configstruct.quit = strTooption_t(getXMLString(config, 10));
+	configstruct.copy = strTooption_t(getXMLString(config, 11));
+	configstruct.cut = strTooption_t(getXMLString(config, 12));
+	configstruct.paste = strTooption_t(getXMLString(config, 13));
+	configstruct.search = strTooption_t(getXMLString(config, 14));
+	configstruct.cancelsearch = strTooption_t(getXMLString(config, 15));
+	configstruct.createfile = strTooption_t(getXMLString(config, 16));
+	configstruct.createdir = strTooption_t(getXMLString(config, 17));
+	configstruct.sortingmethod = getXMLString(config, 18)[0]-48;
+	configstruct.showsize = getXMLString(config, 19)[0]-48;
+	configstruct.shortsize = getXMLString(config, 20)[0]-48;
+	configstruct.searchtype = getXMLString(config, 21)[0]-48;
 	updatecolorpair(1);
 	updatecolorpair(2);
 	updatecolorpair(3);
@@ -280,7 +281,7 @@ void saveConfig()
 	char *homepwd = getenv("HOME");
 	char *configPath = strccat(homepwd, "/.config/fterman.conf");
 	configFile = fopen(configPath, "w+");
-	char *configString = xmlToString(config);
+	char *configString = xmlToString(config, 1);
 	fputs(configString, configFile);
 	fclose(configFile);
 	free(configString);
@@ -326,32 +327,32 @@ void drawSettings()
 				moveprint(i-offset, 0, settings[i]);
 				wrattr(NORMAL);
 				print(" : ");
-				char *keycode = getKeyName(strTooption_t(config->dataArr[i].value.str));
+				char *keycode = getKeyName(strTooption_t(getXMLString(config, i)));
 				print(keycode);
 				free(keycode);
 				break;
 			}
 			case 18:
 			{
-				uint8_t index = config->dataArr[i].value.str[0]-48;
+				uint8_t index = getXMLString(config, i)[0]-48;
 				moveprint(i-offset, 0, sortingmethods[index]);
 				break;
 			}
 			case 19:
 			{
-				uint8_t index = config->dataArr[i].value.str[0]-48;
+				uint8_t index = getXMLString(config, i)[0]-48;
 				moveprint(i-offset, 0, sizestatetext[index]);
 				break;
 			}
 			case 20:
 			{
-				uint8_t index = config->dataArr[i].value.str[0]-48;
+				uint8_t index = getXMLString(config, i)[0]-48;
 				moveprint(i-offset, 0, sizelengthtext[index]);
 				break;
 			}
 			case 21:
 			{
-				uint8_t index = config->dataArr[i].value.str[0]-48;
+				uint8_t index = getXMLString(config, i)[0]-48;
 				moveprint(i-offset, 0, searchtext[index]);
 				break;
 			}
@@ -382,7 +383,7 @@ struct config_s openSettings()
 {
 	drawSettings();
 	option_t ch;
-	while((ch=inesc())!=strTooption_t(config->dataArr[10].value.str))
+	while((ch=inesc())!=strTooption_t(getXMLString(config, 10)))
 	{
 		switch (ch)
 		{
@@ -397,31 +398,31 @@ struct config_s openSettings()
 						do ch = inesc();
 						while (findkeybind(ch, currLine));
 						selected = 0;
-						config->dataArr[currLine].value.str = realloc(config->dataArr[currLine].value.str, getShortLen(ch)+1);
-						option_tToStr(ch, config->dataArr[currLine].value.str); 
+						getXMLString(config, currLine) = realloc(getXMLString(config, currLine), getShortLen(ch)+1);
+						option_tToStr(ch, getXMLString(config, currLine)); 
 						clearSettingLine(currLine);
 						highlightSetting(currLine, settings[currLine]);
 						break;
 					}
 					case 19: // show size
 					{
-						config->dataArr[currLine].value.str[0] = !(config->dataArr[currLine].value.str[0]!=48)+48;
+						getXMLString(config, currLine)[0] = !(getXMLString(config, currLine)[0]!=48)+48;
 						clearSettingLine(currLine);
-						highlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
+						highlightSetting(currLine, sizestatetext[getXMLString(config, currLine)[0]-48]);
 						break;
 					}
 					case 20: // size length
 					{
-						config->dataArr[currLine].value.str[0] = !(config->dataArr[currLine].value.str[0]!=48)+48;
+						getXMLString(config, currLine)[0] = !(getXMLString(config, currLine)[0]!=48)+48;
 						clearSettingLine(currLine);
-						highlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+						highlightSetting(currLine, sizelengthtext[getXMLString(config, currLine)[0]-48]);
 						break;
 					}
 					case 21: // search : dynamic/static
 					{
-						config->dataArr[currLine].value.str[0] = !(config->dataArr[currLine].value.str[0]!=48)+48;
+						getXMLString(config, currLine)[0] = !(getXMLString(config, currLine)[0]!=48)+48;
 						clearSettingLine(currLine);
-						highlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
+						highlightSetting(currLine, searchtext[getXMLString(config, currLine)[0]-48]);
 						break;
 					}
 					default: break;
@@ -434,10 +435,10 @@ struct config_s openSettings()
 				{
 					case 18: // sorting methods
 					{
-						if (config->dataArr[currLine].value.str[0]==55) config->dataArr[currLine].value.str[0] = 47;
-						++config->dataArr[currLine].value.str[0];
+						if (getXMLString(config, currLine)[0]==55) getXMLString(config, currLine)[0] = 47;
+						++getXMLString(config, currLine)[0];
 						clearSettingLine(currLine);
-						highlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]);
+						highlightSetting(currLine, sortingmethods[getXMLString(config, currLine)[0]-48]);
 						break;
 					}
 					case 21: // entry types for colors
@@ -450,16 +451,16 @@ struct config_s openSettings()
 					}
 					case 22: // foreground
 					{
-						config->dataArr[21+currentrytype].value.str[0] -= 8*(config->dataArr[21+currentrytype].value.str[0]==55);
-						++config->dataArr[21+currentrytype].value.str[0];
+						getXMLString(config, 21+currentrytype)[0] -= 8*(getXMLString(config, 21+currentrytype)[0]==55);
+						++getXMLString(config, 21+currentrytype)[0];
 						updatecolorpair(currentrytype+1);
 						drawColorOption(currLine-1, entrytypes[currentrytype], currentrytype+1);
 						break;
 					}
 					case 23: // background
 					{
-						config->dataArr[21+currentrytype].value.str[1] -= 8*(config->dataArr[21+currentrytype].value.str[1]==55);
-						++config->dataArr[21+currentrytype].value.str[1];
+						getXMLString(config, 21+currentrytype)[1] -= 8*(getXMLString(config, 21+currentrytype)[1]==55);
+						++getXMLString(config, 21+currentrytype)[1];
 						updatecolorpair(currentrytype+1);
 						drawColorOption(currLine-2, entrytypes[currentrytype], currentrytype+1);
 						break;
@@ -473,10 +474,10 @@ struct config_s openSettings()
 				{
 					case 18: // sorting method
 					{
-						if (config->dataArr[currLine].value.str[0]==48) config->dataArr[currLine].value.str[0] = 56;
-						--config->dataArr[currLine].value.str[0];
+						if (getXMLString(config, currLine)[0]==48) getXMLString(config, currLine)[0] = 56;
+						--getXMLString(config, currLine)[0];
 						clearSettingLine(currLine);
-						highlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]);
+						highlightSetting(currLine, sortingmethods[getXMLString(config, currLine)[0]-48]);
 						break;
 					}
 					case 21: // color preview
@@ -489,16 +490,16 @@ struct config_s openSettings()
 					}
 					case 22: // foreground
 					{
-						if (config->dataArr[21+currentrytype].value.str[0]==48) config->dataArr[21+currentrytype].value.str[0] = 56;
-						--config->dataArr[21+currentrytype].value.str[0];
+						if (getXMLString(config, 21+currentrytype)[0]==48) getXMLString(config, 21+currentrytype)[0] = 56;
+						--getXMLString(config, 21+currentrytype)[0];
 						updatecolorpair(currentrytype+1);
 						drawColorOption(currLine-1, entrytypes[currentrytype], currentrytype+1);
 						break;
 					}
 					case 23: // background
 					{
-						if (config->dataArr[21+currentrytype].value.str[1]==48) config->dataArr[21+currentrytype].value.str[1] = 56;
-						--config->dataArr[21+currentrytype].value.str[1];
+						if (getXMLString(config, 21+currentrytype)[1]==48) getXMLString(config, 21+currentrytype)[1] = 56;
+						--getXMLString(config, 21+currentrytype)[1];
 						updatecolorpair(currentrytype+1);
 						drawColorOption(currLine-2, entrytypes[currentrytype], currentrytype+1);
 						break;
@@ -517,33 +518,33 @@ struct config_s openSettings()
 						{
 							dehighlightSetting(currLine, settings[currLine]);
 							++currLine;
-							highlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, sortingmethods[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 18: // sorting method => show size
 						{
-							dehighlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]); 
+							dehighlightSetting(currLine, sortingmethods[getXMLString(config, currLine)[0]-48]); 
 							++currLine;
-							highlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, sizestatetext[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 19: // show size => size length
 						{
-							dehighlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
+							dehighlightSetting(currLine, sizestatetext[getXMLString(config, currLine)[0]-48]);
 							++currLine;
-							highlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, sizelengthtext[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 20: // size length => search type
 						{
-							dehighlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+							dehighlightSetting(currLine, sizelengthtext[getXMLString(config, currLine)[0]-48]);
 							++currLine;
-							highlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, searchtext[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 21: // search type => color preview
 						{
-							dehighlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
+							dehighlightSetting(currLine, searchtext[getXMLString(config, currLine)[0]-48]);
 							++currLine;
 							highlightColorOption(currLine, entrytypes[currentrytype], currentrytype+1);
 							break;
@@ -586,37 +587,37 @@ struct config_s openSettings()
 					{
 						case 18: // keybinds <= sorting method 
 						{
-							dehighlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]);
+							dehighlightSetting(currLine, sortingmethods[getXMLString(config, currLine)[0]-48]);
 							--currLine;
 							highlightSetting(currLine, settings[currLine]);
 							break;
 						}
 						case 19: // sorting method <= show size
 						{
-							dehighlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
+							dehighlightSetting(currLine, sizestatetext[getXMLString(config, currLine)[0]-48]);
 							--currLine;
-							highlightSetting(currLine, sortingmethods[config->dataArr[currLine].value.str[0]-48]); 
+							highlightSetting(currLine, sortingmethods[getXMLString(config, currLine)[0]-48]); 
 							break;
 						}
 						case 20: // show size <= size length
 						{
-							dehighlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]); 
+							dehighlightSetting(currLine, sizelengthtext[getXMLString(config, currLine)[0]-48]); 
 							--currLine;
-							highlightSetting(currLine, sizestatetext[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, sizestatetext[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 21: // size length <= search type
 						{
-							dehighlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]); 
+							dehighlightSetting(currLine, searchtext[getXMLString(config, currLine)[0]-48]); 
 							--currLine;
-							highlightSetting(currLine, sizelengthtext[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, sizelengthtext[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 22: // search type <= color preview
 						{
 							drawColorOption(currLine, entrytypes[currentrytype], currentrytype+1);
 							--currLine;
-							highlightSetting(currLine, searchtext[config->dataArr[currLine].value.str[0]-48]);
+							highlightSetting(currLine, searchtext[getXMLString(config, currLine)[0]-48]);
 							break;
 						}
 						case 23: // color preview <= foreground selector
